@@ -20,7 +20,9 @@ When a message is sent, the Public API publishes a `message.sent` event to Kafka
 | **kafka-init** | One-shot container that creates the `message.sent` topic on startup, then exits. Not a second broker — it ensures the topic exists before application services start. |
 | **kafka-ui** | Web UI for browsing topics, messages, and consumer groups. Available at http://localhost:8082 |
 | **storage-mongodb** | MongoDB instance dedicated to the Message Storage service. |
+| **storage-mongo-express** | Web UI for `storage-mongodb`. Available at http://localhost:8083 |
 | **push-mongodb** | MongoDB instance dedicated to the Message Push service (device tokens for Google/Apple notifications). |
+| **push-mongo-express** | Web UI for `push-mongodb`. Available at http://localhost:8084 |
 
 ### Application
 

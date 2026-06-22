@@ -106,6 +106,36 @@ services:
     networks:
       - messaging
 
+  storage-mongo-express:
+    image: mongo-express:1.0.2-20
+    container_name: messaging-storage-mongo-express
+    depends_on:
+      storage-mongodb:
+        condition: service_healthy
+    ports:
+      - "8083:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://storage-mongodb:27017
+      ME_CONFIG_BASENAME: /
+      ME_CONFIG_BASICAUTH: "false"
+    networks:
+      - messaging
+
+  push-mongo-express:
+    image: mongo-express:1.0.2-20
+    container_name: messaging-push-mongo-express
+    depends_on:
+      push-mongodb:
+        condition: service_healthy
+    ports:
+      - "8084:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://push-mongodb:27017
+      ME_CONFIG_BASENAME: /
+      ME_CONFIG_BASICAUTH: "false"
+    networks:
+      - messaging
+
   # ---------------------------------------------------------------------------
   # Application services (Rust)
   # Dev setup: source is bind-mounted, cargo watch rebuilds on change.
@@ -150,7 +180,6 @@ services:
       KAFKA_CONSUMER_GROUP: message-storage
       MONGODB_URI: mongodb://storage-mongodb:27017
       MONGODB_DATABASE: messaging
-      MONGODB_MESSAGES_COLLECTION: messages
     volumes:
       - ./services/message-storage:/app
       - message_storage_target:/app/target

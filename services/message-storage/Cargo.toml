@@ -9,3 +9,4 @@ rdkafka = { version = "0.37", features = ["tokio", "cmake-build"] }
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+mongodb = "3.2"

@@ -1,14 +1,17 @@
 use futures::StreamExt;
+use mongodb::Collection;
 use rdkafka::{
     config::ClientConfig,
     consumer::{Consumer, StreamConsumer},
     message::Message,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 mod topics;
 
-#[derive(Debug, Deserialize)]
+const MESSAGES_COLLECTION: &str = "messages";
+
+#[derive(Debug, Deserialize, Serialize)]
 struct MessageSentEvent {
     chat_id: u32,
     text: String,
@@ -17,6 +20,7 @@ struct MessageSentEvent {
 
 #[tokio::main]
 async fn main() {
+    let collection = create_collection().await;
     let consumer = create_consumer();
 
     consumer
@@ -41,7 +45,7 @@ async fn main() {
                 match maybe_message {
                     None => break,
                     Some(Ok(message)) => {
-                        if let Err(error) = handle_message(&message) {
+                        if let Err(error) = handle_message(&collection, &message).await {
                             eprintln!("failed to handle message: {error}");
                         }
                     }
@@ -54,9 +58,23 @@ async fn main() {
     }
 }
 
+async fn create_collection() -> Collection<MessageSentEvent> {
+    let uri = std::env::var("MONGODB_URI").expect("MONGODB_URI must be set");
+    let database_name = std::env::var("MONGODB_DATABASE").expect("MONGODB_DATABASE must be set");
+
+    let client = mongodb::Client::with_uri_str(&uri)
+        .await
+        .expect("failed to connect to MongoDB");
+
+    client
+        .database(&database_name)
+        .collection(MESSAGES_COLLECTION)
+}
+
 fn create_consumer() -> StreamConsumer {
     let brokers = std::env::var("KAFKA_BROKERS").expect("KAFKA_BROKERS must be set");
-    let group_id = std::env::var("KAFKA_CONSUMER_GROUP").unwrap_or_else(|_| "message-storage".into());
+    let group_id =
+        std::env::var("KAFKA_CONSUMER_GROUP").unwrap_or_else(|_| "message-storage".into());
 
     ClientConfig::new()
         .set("bootstrap.servers", &brokers)
@@ -67,7 +85,10 @@ fn create_consumer() -> StreamConsumer {
         .expect("failed to create Kafka consumer")
 }
 
-fn handle_message(message: &impl Message) -> Result<(), String> {
+async fn handle_message(
+    collection: &Collection<MessageSentEvent>,
+    message: &impl Message,
+) -> Result<(), String> {
     let payload = message
         .payload()
         .ok_or_else(|| "message has no payload".to_string())?;
@@ -75,8 +96,13 @@ fn handle_message(message: &impl Message) -> Result<(), String> {
     let event: MessageSentEvent = serde_json::from_slice(payload)
         .map_err(|error| format!("invalid message.sent payload: {error}"))?;
 
+    collection
+        .insert_one(&event)
+        .await
+        .map_err(|error| format!("failed to store message in MongoDB: {error}"))?;
+
     println!(
-        "received message.sent: chat_id={}, sender_id={}, text={}",
+        "stored message: chat_id={}, sender_id={}, text={}",
         event.chat_id, event.sender_id, event.text
     );
 
