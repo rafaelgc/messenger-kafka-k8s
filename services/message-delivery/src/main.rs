@@ -15,7 +15,10 @@ use rdkafka::{
     message::Message,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 use tokio::sync::mpsc;
 
 mod topics;
@@ -24,12 +27,17 @@ mod topics;
 /// The WebSocket task owns the socket and forwards channel messages to it.
 type ConnectionTx = mpsc::UnboundedSender<String>;
 
+type ConnectionId = u64;
+
+static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
+
 /// Shared, process-wide registry of authenticated users and their connections.
+/// A user may have multiple simultaneous connections (e.g. phone + laptop).
 /// `Arc` allows cheap clones across tasks; `DashMap` allows concurrent lookups
 /// and updates without holding a global lock across `.await` points.
 #[derive(Clone)]
 struct AppState {
-    connections: Arc<DashMap<String, ConnectionTx>>,
+    connections: Arc<DashMap<String, Vec<(ConnectionId, ConnectionTx)>>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -96,6 +104,7 @@ async fn ws_handler(State(state): State<AppState>, ws: WebSocketUpgrade) -> Resp
 
 async fn handle_socket(mut socket: WebSocket, state: AppState) {
     let mut user_id: Option<String> = None;
+    let mut connection_id: Option<ConnectionId> = None;
     let (outbound_tx, mut outbound_rx) = mpsc::unbounded_channel::<String>();
 
     loop {
@@ -103,9 +112,13 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
             maybe_message = socket.recv() => {
                 match maybe_message {
                     Some(Ok(WsMessage::Text(text))) => {
-                        if let Err(error) =
-                            handle_client_message(&text, &mut user_id, &state, outbound_tx.clone())
-                        {
+                        if let Err(error) = handle_client_message(
+                            &text,
+                            &mut user_id,
+                            &mut connection_id,
+                            &state,
+                            outbound_tx.clone(),
+                        ) {
                             eprintln!("invalid client message: {error}");
                         }
                     }
@@ -130,15 +143,44 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
         }
     }
 
-    if let Some(user_id) = user_id {
-        state.connections.remove(&user_id);
-        println!("client disconnected: user_id={user_id}");
+    if let (Some(user_id), Some(connection_id)) = (user_id, connection_id) {
+        unregister_connection(&state, &user_id, connection_id);
+        println!("client disconnected: user_id={user_id}, connection_id={connection_id}");
+    }
+}
+
+fn register_connection(
+    state: &AppState,
+    user_id: &str,
+    connection_id: ConnectionId,
+    outbound_tx: ConnectionTx,
+) {
+    state
+        .connections
+        .entry(user_id.to_string())
+        .or_default()
+        .push((connection_id, outbound_tx));
+}
+
+fn unregister_connection(state: &AppState, user_id: &str, connection_id: ConnectionId) {
+    let should_remove_user = {
+        let mut connections = match state.connections.get_mut(user_id) {
+            Some(connections) => connections,
+            None => return,
+        };
+        connections.retain(|(id, _)| *id != connection_id);
+        connections.is_empty()
+    };
+
+    if should_remove_user {
+        state.connections.remove(user_id);
     }
 }
 
 fn handle_client_message(
     text: &str,
     user_id: &mut Option<String>,
+    connection_id: &mut Option<ConnectionId>,
     state: &AppState,
     outbound_tx: ConnectionTx,
 ) -> Result<(), String> {
@@ -146,15 +188,19 @@ fn handle_client_message(
         .map_err(|error| format!("invalid JSON: {error}"))?;
 
     match message {
-        ClientMessage::Auth { user_id: id } => {
+        ClientMessage::Auth { user_id: authenticated_user_id } => {
             // TODO: Replace self-reported user_id with verification of an auth token.
             if user_id.is_some() {
                 return Err("client is already authenticated".into());
             }
 
-            state.connections.insert(id.clone(), outbound_tx);
-            *user_id = Some(id.clone());
-            println!("client authenticated as user_id={id}");
+            let conn_id = NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
+            register_connection(state, &authenticated_user_id, conn_id, outbound_tx);
+            *user_id = Some(authenticated_user_id.clone());
+            *connection_id = Some(conn_id);
+            println!(
+                "client authenticated as user_id={authenticated_user_id}, connection_id={conn_id}"
+            );
         }
     }
 
@@ -238,21 +284,23 @@ fn handle_kafka_message(message: &impl Message, state: &AppState) -> Result<(), 
 
 fn deliver_to_recipients(state: &AppState, recipient_ids: &[String], payload: &str) -> usize {
     let mut delivered_to = 0;
-    let mut stale_users = Vec::new();
+    let mut stale_connections = Vec::new();
 
     for recipient_id in recipient_ids {
-        if let Some(tx) = state.connections.get(recipient_id) {
-            if tx.send(payload.to_string()).is_err() {
-                stale_users.push(recipient_id.clone());
-            } else {
-                delivered_to += 1;
+        if let Some(connections) = state.connections.get(recipient_id) {
+            for (connection_id, tx) in connections.iter() {
+                if tx.send(payload.to_string()).is_err() {
+                    stale_connections.push((recipient_id.clone(), *connection_id));
+                } else {
+                    delivered_to += 1;
+                }
             }
         }
     }
 
-    for user_id in stale_users {
-        eprintln!("removing stale connection for user_id={user_id}");
-        state.connections.remove(&user_id);
+    for (user_id, connection_id) in stale_connections {
+        eprintln!("removing stale connection {connection_id} for user_id={user_id}");
+        unregister_connection(state, &user_id, connection_id);
     }
 
     delivered_to
