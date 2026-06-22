@@ -2,19 +2,34 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     routing::{get, post},
-    Router,
+    Json, Router,
 };
 use rdkafka::{
     config::ClientConfig,
     producer::{FutureProducer, FutureRecord},
 };
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 mod topics;
 
+const SENDER_ID: &str = "dummy_id";
+
 #[derive(Clone)]
 struct AppState {
     producer: FutureProducer,
+}
+
+#[derive(Deserialize)]
+struct SendMessageRequest {
+    text: String,
+}
+
+#[derive(Serialize)]
+struct MessageSentEvent<'a> {
+    chat_id: u32,
+    text: &'a str,
+    sender_id: &'a str,
 }
 
 #[tokio::main]
@@ -51,8 +66,19 @@ async fn home() -> &'static str {
 async fn send_message(
     State(state): State<AppState>,
     Path(chat_id): Path<u32>,
+    Json(body): Json<SendMessageRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    let payload = format!(r#"{{"chat_id":{chat_id}}}"#);
+    let event = MessageSentEvent {
+        chat_id,
+        text: &body.text,
+        sender_id: SENDER_ID,
+    };
+
+    let payload = serde_json::to_string(&event).map_err(|error| {
+        eprintln!("failed to serialize message.sent event: {error}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
     let key = chat_id.to_string();
 
     state

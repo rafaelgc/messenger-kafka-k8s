@@ -374,6 +374,8 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "rdkafka",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 
