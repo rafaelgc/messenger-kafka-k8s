@@ -68,10 +68,13 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+      chat:
+        condition: service_started
     environment:
       RUST_LOG: info
       KAFKA_BROKERS: kafka:9092
       PUBLIC_API_BIND_ADDR: 0.0.0.0:8080
+      CHAT_SERVICE_URL: http://chat:8085
     volumes:
       - ./services/public-api:/app
       - public_api_target:/app/target
@@ -140,14 +143,11 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
-      chat:
-        condition: service_started
     environment:
       RUST_LOG: info
       KAFKA_BROKERS: kafka:9092
       KAFKA_CONSUMER_GROUP: message-delivery
       DELIVERY_BIND_ADDR: 0.0.0.0:8081
-      CHAT_SERVICE_URL: http://chat:8085
     volumes:
       - ./services/message-delivery:/app
       - message_delivery_target:/app/target

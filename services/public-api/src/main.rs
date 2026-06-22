@@ -18,6 +18,8 @@ const SENDER_ID: &str = "dummy_id";
 #[derive(Clone)]
 struct AppState {
     producer: FutureProducer,
+    http_client: reqwest::Client,
+    chat_service_url: String,
 }
 
 #[derive(Deserialize)]
@@ -25,17 +27,36 @@ struct SendMessageRequest {
     text: String,
 }
 
+#[derive(Deserialize)]
+struct ChatResponse {
+    members: Vec<String>,
+}
+
 #[derive(Serialize)]
-struct MessageSentEvent<'a> {
+struct MessageSentEvent {
     chat_id: u32,
-    text: &'a str,
-    sender_id: &'a str,
+    text: String,
+    sender_id: String,
+    // NOTE: Large groups (1000+ members) inflate the Kafka payload. Broker default
+    // limit is 1 MB per message (message.max.bytes). Revisit fan-out strategy
+    // for very large chats (e.g. separate topic, paging, or chat-level routing).
+    recipient_ids: Vec<String>,
 }
 
 #[tokio::main]
 async fn main() {
+    let chat_service_url =
+        std::env::var("CHAT_SERVICE_URL").unwrap_or_else(|_| "http://chat:8085".into());
+
+    let http_client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .expect("failed to create HTTP client");
+
     let state = AppState {
         producer: create_producer(),
+        http_client,
+        chat_service_url,
     };
 
     let app = Router::new()
@@ -68,10 +89,17 @@ async fn send_message(
     Path(chat_id): Path<u32>,
     Json(body): Json<SendMessageRequest>,
 ) -> Result<StatusCode, StatusCode> {
+    let members = fetch_chat_members(&state, chat_id).await?;
+
+    if !members.contains(&SENDER_ID.to_string()) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
     let event = MessageSentEvent {
         chat_id,
-        text: &body.text,
-        sender_id: SENDER_ID,
+        text: body.text,
+        sender_id: SENDER_ID.to_string(),
+        recipient_ids: members,
     };
 
     let payload = serde_json::to_string(&event).map_err(|error| {
@@ -96,4 +124,37 @@ async fn send_message(
         })?;
 
     Ok(StatusCode::CREATED)
+}
+
+async fn fetch_chat_members(state: &AppState, chat_id: u32) -> Result<Vec<String>, StatusCode> {
+    let url = format!(
+        "{}/chats/{chat_id}",
+        state.chat_service_url.trim_end_matches('/')
+    );
+
+    let response = state.http_client.get(&url).send().await.map_err(|error| {
+        eprintln!("failed to call chat service for chat_id={chat_id}: {error}");
+        StatusCode::BAD_GATEWAY
+    })?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    if !response.status().is_success() {
+        eprintln!(
+            "chat service returned {} for chat_id={chat_id}",
+            response.status()
+        );
+        return Err(StatusCode::BAD_GATEWAY);
+    }
+
+    response
+        .json::<ChatResponse>()
+        .await
+        .map_err(|error| {
+            eprintln!("failed to decode chat service response for chat_id={chat_id}: {error}");
+            StatusCode::BAD_GATEWAY
+        })
+        .map(|chat| chat.members)
 }

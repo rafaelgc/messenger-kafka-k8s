@@ -15,7 +15,7 @@ use rdkafka::{
     message::Message,
 };
 use serde::{Deserialize, Serialize};
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
 mod topics;
@@ -30,8 +30,6 @@ type ConnectionTx = mpsc::UnboundedSender<String>;
 #[derive(Clone)]
 struct AppState {
     connections: Arc<DashMap<String, ConnectionTx>>,
-    http_client: reqwest::Client,
-    chat_service_url: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -39,11 +37,7 @@ struct MessageSentEvent {
     chat_id: u32,
     text: String,
     sender_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct ChatResponse {
-    members: Vec<String>,
+    recipient_ids: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -54,18 +48,8 @@ enum ClientMessage {
 
 #[tokio::main]
 async fn main() {
-    let chat_service_url =
-        std::env::var("CHAT_SERVICE_URL").unwrap_or_else(|_| "http://chat:8085".into());
-
-    let http_client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(5))
-        .build()
-        .expect("failed to create HTTP client");
-
     let state = AppState {
         connections: Arc::new(DashMap::new()),
-        http_client,
-        chat_service_url,
     };
 
     tokio::select! {
@@ -195,7 +179,7 @@ async fn run_kafka_consumer(state: AppState) -> Result<(), String> {
     while let Some(maybe_message) = message_stream.next().await {
         match maybe_message {
             Ok(message) => {
-                if let Err(error) = handle_kafka_message(&message, &state).await {
+                if let Err(error) = handle_kafka_message(&message, &state) {
                     eprintln!("failed to handle message: {error}");
                 }
             }
@@ -222,7 +206,7 @@ fn create_consumer() -> StreamConsumer {
         .expect("failed to create Kafka consumer")
 }
 
-async fn handle_kafka_message(message: &impl Message, state: &AppState) -> Result<(), String> {
+fn handle_kafka_message(message: &impl Message, state: &AppState) -> Result<(), String> {
     let payload = message
         .payload()
         .ok_or_else(|| "message has no payload".to_string())?;
@@ -231,70 +215,35 @@ async fn handle_kafka_message(message: &impl Message, state: &AppState) -> Resul
         .map_err(|error| format!("invalid message.sent payload: {error}"))?;
 
     println!(
-        "received message.sent: chat_id={}, sender_id={}, text={}",
-        event.chat_id, event.sender_id, event.text
+        "received message.sent: chat_id={}, sender_id={}, text={}, recipients={}",
+        event.chat_id,
+        event.sender_id,
+        event.text,
+        event.recipient_ids.len()
     );
-
-    // TODO: Cache chat membership locally (TTL or Kafka invalidation events) to avoid
-    // calling the Chat service on every message.sent at scale.
-    let members = fetch_chat_members(state, event.chat_id).await?;
-
-    println!("chat members: {:?}", members);
 
     let outbound = serde_json::to_string(&event)
         .map_err(|error| format!("failed to serialize outbound message: {error}"))?;
 
-    let delivered_to = deliver_to_members(state, &members, &outbound);
+    let delivered_to = deliver_to_recipients(state, &event.recipient_ids, &outbound);
 
     println!(
-        "delivered message.sent to {delivered_to} connected member(s) (chat_id={}, {} member(s) in chat)",
+        "delivered message.sent to {delivered_to} connected recipient(s) (chat_id={}, {} recipient(s) in event)",
         event.chat_id,
-        members.len()
+        event.recipient_ids.len()
     );
 
     Ok(())
 }
 
-async fn fetch_chat_members(state: &AppState, chat_id: u32) -> Result<Vec<String>, String> {
-    let url = format!(
-        "{}/chats/{chat_id}",
-        state.chat_service_url.trim_end_matches('/')
-    );
-
-    let response = state
-        .http_client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|error| format!("failed to call chat service: {error}"))?;
-
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Ok(Vec::new());
-    }
-
-    if !response.status().is_success() {
-        return Err(format!(
-            "chat service returned {} for chat_id={chat_id}",
-            response.status()
-        ));
-    }
-
-    let chat = response
-        .json::<ChatResponse>()
-        .await
-        .map_err(|error| format!("failed to decode chat service response: {error}"))?;
-
-    Ok(chat.members)
-}
-
-fn deliver_to_members(state: &AppState, member_ids: &[String], payload: &str) -> usize {
+fn deliver_to_recipients(state: &AppState, recipient_ids: &[String], payload: &str) -> usize {
     let mut delivered_to = 0;
     let mut stale_users = Vec::new();
 
-    for member_id in member_ids {
-        if let Some(tx) = state.connections.get(member_id) {
+    for recipient_id in recipient_ids {
+        if let Some(tx) = state.connections.get(recipient_id) {
             if tx.send(payload.to_string()).is_err() {
-                stale_users.push(member_id.clone());
+                stale_users.push(recipient_id.clone());
             } else {
                 delivered_to += 1;
             }
