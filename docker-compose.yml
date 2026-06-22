@@ -8,7 +8,7 @@ x-rust-dev-image: &rust-dev-image
 
 services:
   # ---------------------------------------------------------------------------
-  # Infrastructure
+  # Shared infrastructure
   # ---------------------------------------------------------------------------
 
   kafka:
@@ -56,19 +56,35 @@ services:
     networks:
       - messaging
 
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: messaging-kafka-ui
+  # ---------------------------------------------------------------------------
+  # Public API
+  # ---------------------------------------------------------------------------
+
+  public-api:
+    <<: *rust-dev-image
+    container_name: messaging-public-api
     depends_on:
       kafka:
         condition: service_healthy
-    ports:
-      - "8082:8080"
+      kafka-init:
+        condition: service_completed_successfully
     environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      RUST_LOG: info
+      KAFKA_BROKERS: kafka:9092
+      PUBLIC_API_BIND_ADDR: 0.0.0.0:8080
+    volumes:
+      - ./services/public-api:/app
+      - public_api_target:/app/target
+      - cargo_registry:/usr/local/cargo/registry
+      - cargo_git:/usr/local/cargo/git
+    ports:
+      - "8080:8080"
     networks:
       - messaging
+
+  # ---------------------------------------------------------------------------
+  # Message Storage Service
+  # ---------------------------------------------------------------------------
 
   storage-mongodb:
     image: mongo:7
@@ -88,6 +104,61 @@ services:
     networks:
       - messaging
 
+  message-storage:
+    <<: *rust-dev-image
+    container_name: messaging-message-storage
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      storage-mongodb:
+        condition: service_healthy
+    environment:
+      RUST_LOG: info
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_CONSUMER_GROUP: message-storage
+      MONGODB_URI: mongodb://storage-mongodb:27017
+      MONGODB_DATABASE: messaging
+    volumes:
+      - ./services/message-storage:/app
+      - message_storage_target:/app/target
+      - cargo_registry:/usr/local/cargo/registry
+      - cargo_git:/usr/local/cargo/git
+    networks:
+      - messaging
+
+  # ---------------------------------------------------------------------------
+  # Message Delivery Service
+  # ---------------------------------------------------------------------------
+
+  message-delivery:
+    <<: *rust-dev-image
+    container_name: messaging-message-delivery
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      RUST_LOG: info
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_CONSUMER_GROUP: message-delivery
+      DELIVERY_BIND_ADDR: 0.0.0.0:8081
+    volumes:
+      - ./services/message-delivery:/app
+      - message_delivery_target:/app/target
+      - cargo_registry:/usr/local/cargo/registry
+      - cargo_git:/usr/local/cargo/git
+    ports:
+      - "8081:8081"
+    networks:
+      - messaging
+
+  # ---------------------------------------------------------------------------
+  # Message Push Service
+  # ---------------------------------------------------------------------------
+
   push-mongodb:
     image: mongo:7
     container_name: messaging-push-mongodb
@@ -103,6 +174,51 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    networks:
+      - messaging
+
+  message-push:
+    <<: *rust-dev-image
+    container_name: messaging-message-push
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      push-mongodb:
+        condition: service_healthy
+    environment:
+      RUST_LOG: info
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_CONSUMER_GROUP: message-push
+      MONGODB_URI: mongodb://push-mongodb:27017
+      MONGODB_DATABASE: push
+      MONGODB_PUSH_TOKENS_COLLECTION: push_tokens
+      PUSH_CONNECTOR: dummy
+    volumes:
+      - ./services/message-push:/app
+      - message_push_target:/app/target
+      - cargo_registry:/usr/local/cargo/registry
+      - cargo_git:/usr/local/cargo/git
+    networks:
+      - messaging
+
+  # ---------------------------------------------------------------------------
+  # Dev / debug tools
+  # Web UIs for local development — not required in production.
+  # ---------------------------------------------------------------------------
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: messaging-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8082:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
     networks:
       - messaging
 
@@ -133,107 +249,6 @@ services:
       ME_CONFIG_MONGODB_URL: mongodb://push-mongodb:27017
       ME_CONFIG_BASENAME: /
       ME_CONFIG_BASICAUTH: "false"
-    networks:
-      - messaging
-
-  # ---------------------------------------------------------------------------
-  # Application services (Rust)
-  # Dev setup: source is bind-mounted, cargo watch rebuilds on change.
-  # Production images: services/<name>/Dockerfile
-  # ---------------------------------------------------------------------------
-
-  public-api:
-    <<: *rust-dev-image
-    container_name: messaging-public-api
-    depends_on:
-      kafka:
-        condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
-    environment:
-      RUST_LOG: info
-      KAFKA_BROKERS: kafka:9092
-      PUBLIC_API_BIND_ADDR: 0.0.0.0:8080
-    volumes:
-      - ./services/public-api:/app
-      - public_api_target:/app/target
-      - cargo_registry:/usr/local/cargo/registry
-      - cargo_git:/usr/local/cargo/git
-    ports:
-      - "8080:8080"
-    networks:
-      - messaging
-
-  message-storage:
-    <<: *rust-dev-image
-    container_name: messaging-message-storage
-    depends_on:
-      kafka:
-        condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
-      storage-mongodb:
-        condition: service_healthy
-    environment:
-      RUST_LOG: info
-      KAFKA_BROKERS: kafka:9092
-      KAFKA_CONSUMER_GROUP: message-storage
-      MONGODB_URI: mongodb://storage-mongodb:27017
-      MONGODB_DATABASE: messaging
-    volumes:
-      - ./services/message-storage:/app
-      - message_storage_target:/app/target
-      - cargo_registry:/usr/local/cargo/registry
-      - cargo_git:/usr/local/cargo/git
-    networks:
-      - messaging
-
-  message-delivery:
-    <<: *rust-dev-image
-    container_name: messaging-message-delivery
-    depends_on:
-      kafka:
-        condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
-    environment:
-      RUST_LOG: info
-      KAFKA_BROKERS: kafka:9092
-      KAFKA_CONSUMER_GROUP: message-delivery
-      DELIVERY_BIND_ADDR: 0.0.0.0:8081
-    volumes:
-      - ./services/message-delivery:/app
-      - message_delivery_target:/app/target
-      - cargo_registry:/usr/local/cargo/registry
-      - cargo_git:/usr/local/cargo/git
-    ports:
-      - "8081:8081"
-    networks:
-      - messaging
-
-  message-push:
-    <<: *rust-dev-image
-    container_name: messaging-message-push
-    depends_on:
-      kafka:
-        condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
-      push-mongodb:
-        condition: service_healthy
-    environment:
-      RUST_LOG: info
-      KAFKA_BROKERS: kafka:9092
-      KAFKA_CONSUMER_GROUP: message-push
-      MONGODB_URI: mongodb://push-mongodb:27017
-      MONGODB_DATABASE: push
-      MONGODB_PUSH_TOKENS_COLLECTION: push_tokens
-      PUSH_CONNECTOR: dummy
-    volumes:
-      - ./services/message-push:/app
-      - message_push_target:/app/target
-      - cargo_registry:/usr/local/cargo/registry
-      - cargo_git:/usr/local/cargo/git
     networks:
       - messaging
 
