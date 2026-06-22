@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 axum = "0.8"
+rdkafka = { version = "0.37", features = ["tokio", "cmake-build"] }

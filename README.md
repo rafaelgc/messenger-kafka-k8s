@@ -18,6 +18,7 @@ When a message is sent, the Public API publishes a `message.sent` event to Kafka
 |---|---|
 | **kafka** | Event broker (`soldevelo/kafka`, Bitnami-compatible). All services publish and consume through Kafka. Runs in KRaft mode (no Zookeeper). |
 | **kafka-init** | One-shot container that creates the `message.sent` topic on startup, then exits. Not a second broker — it ensures the topic exists before application services start. |
+| **kafka-ui** | Web UI for browsing topics, messages, and consumer groups. Available at http://localhost:8082 |
 | **storage-mongodb** | MongoDB instance dedicated to the Message Storage service. |
 | **push-mongodb** | MongoDB instance dedicated to the Message Push service (device tokens for Google/Apple notifications). |
 
