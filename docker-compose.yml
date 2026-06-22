@@ -1,0 +1,214 @@
+name: messaging
+
+x-rust-dev-image: &rust-dev-image
+  image: messaging-rust-dev
+  build:
+    context: ./services
+    dockerfile: Dockerfile.dev
+
+services:
+  # ---------------------------------------------------------------------------
+  # Infrastructure
+  # ---------------------------------------------------------------------------
+
+  kafka:
+    image: soldevelo/kafka:3.9
+    container_name: messaging-kafka
+    environment:
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - messaging
+
+  # One-shot init container (not a second broker). Creates the message.sent topic
+  # after Kafka is healthy, then exits. Apps wait for this before starting.
+  kafka-init:
+    image: soldevelo/kafka:3.9
+    container_name: messaging-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        kafka-topics.sh --bootstrap-server kafka:9092 \
+          --create --if-not-exists \
+          --topic message.sent \
+          --partitions 3 \
+          --replication-factor 1
+    restart: "no"
+    networks:
+      - messaging
+
+  storage-mongodb:
+    image: mongo:7
+    container_name: messaging-storage-mongodb
+    environment:
+      MONGO_INITDB_DATABASE: messaging
+    ports:
+      - "27017:27017"
+    volumes:
+      - storage_mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - messaging
+
+  push-mongodb:
+    image: mongo:7
+    container_name: messaging-push-mongodb
+    environment:
+      MONGO_INITDB_DATABASE: push
+    ports:
+      - "27018:27017"
+    volumes:
+      - push_mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - messaging
+
+  # ---------------------------------------------------------------------------
+  # Application services (Rust)
+  # Dev setup: source is bind-mounted, cargo watch rebuilds on change.
+  # Production images: services/<name>/Dockerfile
+  # ---------------------------------------------------------------------------
+
+  public-api:
+    <<: *rust-dev-image
+    container_name: messaging-public-api
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      RUST_LOG: info
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC_MESSAGE_SENT: message.sent
+      PUBLIC_API_BIND_ADDR: 0.0.0.0:8080
+    volumes:
+      - ./services/public-api:/app
+      - public_api_target:/app/target
+      - cargo_registry:/usr/local/cargo/registry
+      - cargo_git:/usr/local/cargo/git
+    ports:
+      - "8080:8080"
+    networks:
+      - messaging
+
+  message-storage:
+    <<: *rust-dev-image
+    container_name: messaging-message-storage
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      storage-mongodb:
+        condition: service_healthy
+    environment:
+      RUST_LOG: info
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC_MESSAGE_SENT: message.sent
+      KAFKA_CONSUMER_GROUP: message-storage
+      MONGODB_URI: mongodb://storage-mongodb:27017
+      MONGODB_DATABASE: messaging
+      MONGODB_MESSAGES_COLLECTION: messages
+    volumes:
+      - ./services/message-storage:/app
+      - message_storage_target:/app/target
+      - cargo_registry:/usr/local/cargo/registry
+      - cargo_git:/usr/local/cargo/git
+    networks:
+      - messaging
+
+  message-delivery:
+    <<: *rust-dev-image
+    container_name: messaging-message-delivery
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      RUST_LOG: info
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC_MESSAGE_SENT: message.sent
+      KAFKA_CONSUMER_GROUP: message-delivery
+      DELIVERY_BIND_ADDR: 0.0.0.0:8081
+    volumes:
+      - ./services/message-delivery:/app
+      - message_delivery_target:/app/target
+      - cargo_registry:/usr/local/cargo/registry
+      - cargo_git:/usr/local/cargo/git
+    ports:
+      - "8081:8081"
+    networks:
+      - messaging
+
+  message-push:
+    <<: *rust-dev-image
+    container_name: messaging-message-push
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      push-mongodb:
+        condition: service_healthy
+    environment:
+      RUST_LOG: info
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC_MESSAGE_SENT: message.sent
+      KAFKA_CONSUMER_GROUP: message-push
+      MONGODB_URI: mongodb://push-mongodb:27017
+      MONGODB_DATABASE: push
+      MONGODB_PUSH_TOKENS_COLLECTION: push_tokens
+      PUSH_CONNECTOR: dummy
+    volumes:
+      - ./services/message-push:/app
+      - message_push_target:/app/target
+      - cargo_registry:/usr/local/cargo/registry
+      - cargo_git:/usr/local/cargo/git
+    networks:
+      - messaging
+
+networks:
+  messaging:
+    driver: bridge
+
+volumes:
+  kafka_data:
+  storage_mongodb_data:
+  push_mongodb_data:
+  cargo_registry:
+  cargo_git:
+  public_api_target:
+  message_storage_target:
+  message_delivery_target:
+  message_push_target:
