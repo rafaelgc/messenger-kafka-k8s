@@ -70,11 +70,14 @@ services:
         condition: service_completed_successfully
       chat:
         condition: service_started
+      message-storage:
+        condition: service_started
     environment:
       RUST_LOG: info
       KAFKA_BROKERS: kafka:9092
       PUBLIC_API_BIND_ADDR: 0.0.0.0:8080
       CHAT_SERVICE_URL: http://chat:8085
+      STORAGE_SERVICE_URL: http://message-storage:8087
     volumes:
       - ./services/public-api:/app
       - public_api_target:/app/target
@@ -123,6 +126,7 @@ services:
       KAFKA_CONSUMER_GROUP: message-storage
       MONGODB_URI: mongodb://storage-mongodb:27017
       MONGODB_DATABASE: messaging
+      STORAGE_BIND_ADDR: 0.0.0.0:8087
     volumes:
       - ./services/message-storage:/app
       - message_storage_target:/app/target

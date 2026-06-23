@@ -1,7 +1,7 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
-    routing::{get, post},
+    routing::get,
     Json, Router,
 };
 use rdkafka::{
@@ -20,6 +20,35 @@ struct AppState {
     producer: FutureProducer,
     http_client: reqwest::Client,
     chat_service_url: String,
+    storage_service_url: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct MessageItem {
+    id: String,
+    chat_id: u32,
+    text: String,
+    sender_id: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct PaginatedMessagesResponse {
+    messages: Vec<MessageItem>,
+    pagination: PaginationMeta,
+}
+
+#[derive(Serialize, Deserialize)]
+struct PaginationMeta {
+    has_more: bool,
+    next_cursor: Option<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct ListMessagesQuery {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    limit: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    before: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -47,6 +76,8 @@ struct MessageSentEvent {
 async fn main() {
     let chat_service_url =
         std::env::var("CHAT_SERVICE_URL").unwrap_or_else(|_| "http://chat:8085".into());
+    let storage_service_url = std::env::var("STORAGE_SERVICE_URL")
+        .unwrap_or_else(|_| "http://message-storage:8087".into());
 
     let http_client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
@@ -57,11 +88,15 @@ async fn main() {
         producer: create_producer(),
         http_client,
         chat_service_url,
+        storage_service_url,
     };
 
     let app = Router::new()
         .route("/", get(home))
-        .route("/chats/{chat_id}/messages", post(send_message))
+        .route(
+            "/chats/{chat_id}/messages",
+            get(list_messages).post(send_message),
+        )
         .with_state(state);
 
     let bind_addr =
@@ -82,6 +117,60 @@ fn create_producer() -> FutureProducer {
 
 async fn home() -> &'static str {
     "Hello, World!"
+}
+
+// NOTE: Membership is checked at request time only. Storage returns every message
+// in the chat — there is no per-user history. Users who leave cannot access past
+// messages; users who join later see the full chat history.
+async fn list_messages(
+    State(state): State<AppState>,
+    Path(chat_id): Path<u32>,
+    Query(query): Query<ListMessagesQuery>,
+) -> Result<Json<PaginatedMessagesResponse>, StatusCode> {
+    let members = fetch_chat_members(&state, chat_id).await?;
+
+    if !members.contains(&SENDER_ID.to_string()) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let url = format!(
+        "{}/chats/{chat_id}/messages",
+        state.storage_service_url.trim_end_matches('/')
+    );
+
+    let response = state
+        .http_client
+        .get(&url)
+        .query(&query)
+        .send()
+        .await
+        .map_err(|error| {
+            eprintln!("failed to call storage service for chat_id={chat_id}: {error}");
+            StatusCode::BAD_GATEWAY
+        })?;
+
+    if response.status() == reqwest::StatusCode::BAD_REQUEST {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if !response.status().is_success() {
+        eprintln!(
+            "storage service returned {} for chat_id={chat_id}",
+            response.status()
+        );
+        return Err(StatusCode::BAD_GATEWAY);
+    }
+
+    response
+        .json::<PaginatedMessagesResponse>()
+        .await
+        .map_err(|error| {
+            eprintln!(
+                "failed to decode storage service response for chat_id={chat_id}: {error}"
+            );
+            StatusCode::BAD_GATEWAY
+        })
+        .map(Json)
 }
 
 async fn send_message(
