@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    http::{header::AUTHORIZATION, HeaderMap, StatusCode},
+    http::{header::AUTHORIZATION, HeaderMap, HeaderValue, Method, StatusCode},
     routing::{get, post},
     Json, Router,
 };
@@ -11,6 +11,7 @@ use rdkafka::{
 };
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use tower_http::cors::CorsLayer;
 
 mod topics;
 
@@ -131,6 +132,17 @@ async fn main() {
         jwt_secret,
     };
 
+    let cors_origin = std::env::var("CORS_ALLOWED_ORIGIN")
+        .unwrap_or_else(|_| "http://localhost:3000".into());
+    let cors = CorsLayer::new()
+        .allow_origin(
+            cors_origin
+                .parse::<HeaderValue>()
+                .expect("CORS_ALLOWED_ORIGIN must be a valid header value"),
+        )
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([AUTHORIZATION, axum::http::header::CONTENT_TYPE]);
+
     let app = Router::new()
         .route("/", get(home))
         .route("/users", post(create_user))
@@ -139,7 +151,8 @@ async fn main() {
             "/chats/{chat_id}/messages",
             get(list_messages).post(send_message),
         )
-        .with_state(state);
+        .with_state(state)
+        .layer(cors);
 
     let bind_addr =
         std::env::var("PUBLIC_API_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".into());
