@@ -25,6 +25,8 @@ When a message is sent, the Public API publishes a `message.sent` event to Kafka
 | **push-mongo-express** | Web UI for `push-mongodb`. Available at http://localhost:8084 |
 | **chat-mongodb** | MongoDB instance dedicated to the Chat service. |
 | **chat-mongo-express** | Web UI for `chat-mongodb`. Available at http://localhost:8086 |
+| **users-mongodb** | MongoDB instance dedicated to the Users service. |
+| **users-mongo-express** | Web UI for `users-mongodb`. Available at http://localhost:8089 |
 
 ### Application
 
@@ -32,6 +34,7 @@ When a message is sent, the Public API publishes a `message.sent` event to Kafka
 |---|---|---|---|
 | **public-api** | Rust | 8080 | Public HTTP API. Accepts client requests and publishes `message.sent` events. |
 | **chat** | Rust | 8085 | Chat metadata API. Returns chat members and related attributes. |
+| **users** | Rust | — | User registration and authentication. Issues JWT tokens. Internal only — exposed via `public-api`. |
 | **message-storage** | Rust | — | Consumes `message.sent` and stores message payloads in `storage-mongodb`. |
 | **message-delivery** | Rust | 8081 | Maintains WebSocket connections with online clients. Consumes `message.sent` and delivers messages in real time. |
 | **message-push** | Rust | — | Consumes `message.sent` and sends push notifications to offline users. Stores device tokens in `push-mongodb`. Uses a dummy connector for now (no real Google/Apple integration). |

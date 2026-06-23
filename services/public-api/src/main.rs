@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use rdkafka::{
@@ -21,6 +21,7 @@ struct AppState {
     http_client: reqwest::Client,
     chat_service_url: String,
     storage_service_url: String,
+    users_service_url: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -51,6 +52,29 @@ struct ListMessagesQuery {
     before: Option<String>,
 }
 
+#[derive(Deserialize, Serialize)]
+struct CreateUserRequest {
+    nickname: String,
+    password: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct CreateUserResponse {
+    id: String,
+    nickname: String,
+}
+
+#[derive(Deserialize, Serialize)]
+struct AuthenticateRequest {
+    nickname: String,
+    password: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct AuthenticateResponse {
+    token: String,
+}
+
 #[derive(Deserialize)]
 struct SendMessageRequest {
     text: String,
@@ -78,6 +102,8 @@ async fn main() {
         std::env::var("CHAT_SERVICE_URL").unwrap_or_else(|_| "http://chat:8085".into());
     let storage_service_url = std::env::var("STORAGE_SERVICE_URL")
         .unwrap_or_else(|_| "http://message-storage:8087".into());
+    let users_service_url =
+        std::env::var("USERS_SERVICE_URL").unwrap_or_else(|_| "http://users:8088".into());
 
     let http_client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
@@ -89,10 +115,13 @@ async fn main() {
         http_client,
         chat_service_url,
         storage_service_url,
+        users_service_url,
     };
 
     let app = Router::new()
         .route("/", get(home))
+        .route("/users", post(create_user))
+        .route("/authentications", post(authenticate))
         .route(
             "/chats/{chat_id}/messages",
             get(list_messages).post(send_message),
@@ -117,6 +146,78 @@ fn create_producer() -> FutureProducer {
 
 async fn home() -> &'static str {
     "Hello, World!"
+}
+
+async fn create_user(
+    State(state): State<AppState>,
+    Json(body): Json<CreateUserRequest>,
+) -> Result<(StatusCode, Json<CreateUserResponse>), StatusCode> {
+    let url = format!(
+        "{}/users",
+        state.users_service_url.trim_end_matches('/')
+    );
+
+    let response = state
+        .http_client
+        .post(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|error| {
+            eprintln!("failed to call users service to create user: {error}");
+            StatusCode::BAD_GATEWAY
+        })?;
+
+    let status = response.status();
+    if !status.is_success() {
+        return Err(upstream_status(status));
+    }
+
+    let user = response.json::<CreateUserResponse>().await.map_err(|error| {
+        eprintln!("failed to decode users service create response: {error}");
+        StatusCode::BAD_GATEWAY
+    })?;
+
+    Ok((StatusCode::CREATED, Json(user)))
+}
+
+async fn authenticate(
+    State(state): State<AppState>,
+    Json(body): Json<AuthenticateRequest>,
+) -> Result<Json<AuthenticateResponse>, StatusCode> {
+    let url = format!(
+        "{}/authentications",
+        state.users_service_url.trim_end_matches('/')
+    );
+
+    let response = state
+        .http_client
+        .post(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|error| {
+            eprintln!("failed to call users service to authenticate: {error}");
+            StatusCode::BAD_GATEWAY
+        })?;
+
+    let status = response.status();
+    if !status.is_success() {
+        return Err(upstream_status(status));
+    }
+
+    response
+        .json::<AuthenticateResponse>()
+        .await
+        .map_err(|error| {
+            eprintln!("failed to decode users service authentication response: {error}");
+            StatusCode::BAD_GATEWAY
+        })
+        .map(Json)
+}
+
+fn upstream_status(status: reqwest::StatusCode) -> StatusCode {
+    StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY)
 }
 
 // NOTE: Membership is checked at request time only. Storage returns every message
