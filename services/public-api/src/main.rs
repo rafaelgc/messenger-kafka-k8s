@@ -1,9 +1,10 @@
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{header::AUTHORIZATION, HeaderMap, StatusCode},
     routing::{get, post},
     Json, Router,
 };
+use jsonwebtoken::{decode, DecodingKey, Validation};
 use rdkafka::{
     config::ClientConfig,
     producer::{FutureProducer, FutureRecord},
@@ -22,12 +23,13 @@ struct AppState {
     chat_service_url: String,
     storage_service_url: String,
     users_service_url: String,
+    jwt_secret: String,
 }
 
 #[derive(Serialize, Deserialize)]
 struct MessageItem {
     id: String,
-    chat_id: u32,
+    chat_id: String,
     text: String,
     sender_id: String,
 }
@@ -76,6 +78,14 @@ struct AuthenticateResponse {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
+struct TokenClaims {
+    sub: String,
+    nickname: String,
+    exp: usize,
+}
+
+#[derive(Deserialize)]
 struct SendMessageRequest {
     text: String,
 }
@@ -87,7 +97,7 @@ struct ChatResponse {
 
 #[derive(Serialize)]
 struct MessageSentEvent {
-    chat_id: u32,
+    chat_id: String,
     text: String,
     sender_id: String,
     // NOTE: Large groups (1000+ members) inflate the Kafka payload. Broker default
@@ -104,6 +114,8 @@ async fn main() {
         .unwrap_or_else(|_| "http://message-storage:8087".into());
     let users_service_url =
         std::env::var("USERS_SERVICE_URL").unwrap_or_else(|_| "http://users:8088".into());
+    let jwt_secret = std::env::var("JWT_SECRET")
+        .unwrap_or_else(|_| "dev-jwt-secret-change-in-production".into());
 
     let http_client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
@@ -116,6 +128,7 @@ async fn main() {
         chat_service_url,
         storage_service_url,
         users_service_url,
+        jwt_secret,
     };
 
     let app = Router::new()
@@ -225,10 +238,10 @@ fn upstream_status(status: reqwest::StatusCode) -> StatusCode {
 // messages; users who join later see the full chat history.
 async fn list_messages(
     State(state): State<AppState>,
-    Path(chat_id): Path<u32>,
+    Path(chat_id): Path<String>,
     Query(query): Query<ListMessagesQuery>,
 ) -> Result<Json<PaginatedMessagesResponse>, StatusCode> {
-    let members = fetch_chat_members(&state, chat_id).await?;
+    let members = fetch_chat_members(&state, &chat_id).await?;
 
     if !members.contains(&SENDER_ID.to_string()) {
         return Err(StatusCode::FORBIDDEN);
@@ -276,19 +289,23 @@ async fn list_messages(
 
 async fn send_message(
     State(state): State<AppState>,
-    Path(chat_id): Path<u32>,
+    headers: HeaderMap,
+    Path(chat_id): Path<String>,
     Json(body): Json<SendMessageRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    let members = fetch_chat_members(&state, chat_id).await?;
+    let user_id = authenticate_request(&headers, &state.jwt_secret)?;
+    let members = fetch_chat_members(&state, &chat_id).await?;
 
-    if !members.contains(&SENDER_ID.to_string()) {
+    if !members.contains(&user_id) {
         return Err(StatusCode::FORBIDDEN);
     }
+
+    let key = chat_id.clone();
 
     let event = MessageSentEvent {
         chat_id,
         text: body.text,
-        sender_id: SENDER_ID.to_string(),
+        sender_id: user_id,
         recipient_ids: members,
     };
 
@@ -296,8 +313,6 @@ async fn send_message(
         eprintln!("failed to serialize message.sent event: {error}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-
-    let key = chat_id.to_string();
 
     state
         .producer
@@ -316,7 +331,37 @@ async fn send_message(
     Ok(StatusCode::CREATED)
 }
 
-async fn fetch_chat_members(state: &AppState, chat_id: u32) -> Result<Vec<String>, StatusCode> {
+fn authenticate_request(headers: &HeaderMap, jwt_secret: &str) -> Result<String, StatusCode> {
+    let token = bearer_token(headers)?;
+    let claims = decode_token(jwt_secret, token)?;
+    Ok(claims.sub)
+}
+
+fn bearer_token(headers: &HeaderMap) -> Result<&str, StatusCode> {
+    let value = headers
+        .get(AUTHORIZATION)
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let value = value.to_str().map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    value
+        .strip_prefix("Bearer ")
+        .ok_or(StatusCode::UNAUTHORIZED)
+}
+
+fn decode_token(jwt_secret: &str, token: &str) -> Result<TokenClaims, StatusCode> {
+    decode::<TokenClaims>(
+        token,
+        &DecodingKey::from_secret(jwt_secret.as_bytes()),
+        &Validation::default(),
+    )
+    .map(|data| data.claims)
+    .map_err(|error| {
+        eprintln!("invalid auth token: {error}");
+        StatusCode::UNAUTHORIZED
+    })
+}
+
+async fn fetch_chat_members(state: &AppState, chat_id: &str) -> Result<Vec<String>, StatusCode> {
     let url = format!(
         "{}/chats/{chat_id}",
         state.chat_service_url.trim_end_matches('/')
@@ -326,6 +371,10 @@ async fn fetch_chat_members(state: &AppState, chat_id: u32) -> Result<Vec<String
         eprintln!("failed to call chat service for chat_id={chat_id}: {error}");
         StatusCode::BAD_GATEWAY
     })?;
+
+    if response.status() == reqwest::StatusCode::BAD_REQUEST {
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     if response.status() == reqwest::StatusCode::NOT_FOUND {
         return Err(StatusCode::NOT_FOUND);

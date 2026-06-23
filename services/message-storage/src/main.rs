@@ -30,7 +30,7 @@ struct AppState {
 struct StoredMessage {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     id: Option<ObjectId>,
-    chat_id: u32,
+    chat_id: String,
     text: String,
     sender_id: String,
 }
@@ -38,7 +38,7 @@ struct StoredMessage {
 #[derive(Serialize)]
 struct MessageItem {
     id: String,
-    chat_id: u32,
+    chat_id: String,
     text: String,
     sender_id: String,
 }
@@ -108,13 +108,13 @@ async fn run_http_server(state: AppState) -> Result<(), String> {
 
 async fn list_messages(
     State(state): State<AppState>,
-    Path(chat_id): Path<u32>,
+    Path(chat_id): Path<String>,
     Query(query): Query<ListMessagesQuery>,
 ) -> Result<Json<PaginatedMessagesResponse>, StatusCode> {
     let limit = query.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
     let fetch_limit = (limit + 1) as i64;
 
-    let mut filter = doc! { "chat_id": chat_id };
+    let mut filter = doc! { "chat_id": &chat_id };
 
     if let Some(before) = &query.before {
         let before_id = ObjectId::parse_str(before).map_err(|error| {

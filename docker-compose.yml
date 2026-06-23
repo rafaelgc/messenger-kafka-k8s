@@ -81,6 +81,7 @@ services:
       CHAT_SERVICE_URL: http://chat:8085
       STORAGE_SERVICE_URL: http://message-storage:8087
       USERS_SERVICE_URL: http://users:8088
+      JWT_SECRET: dev-jwt-secret-change-in-production
     volumes:
       - ./services/public-api:/app
       - public_api_target:/app/target

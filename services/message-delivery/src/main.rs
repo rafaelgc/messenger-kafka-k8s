@@ -42,7 +42,7 @@ struct AppState {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct MessageSentEvent {
-    chat_id: u32,
+    chat_id: String,
     text: String,
     sender_id: String,
     recipient_ids: Vec<String>,

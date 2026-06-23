@@ -4,7 +4,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use mongodb::bson::{doc, Document};
+use mongodb::bson::{doc, oid::ObjectId, Document};
 use serde::{Deserialize, Serialize};
 
 const CHATS_COLLECTION: &str = "chats";
@@ -55,11 +55,16 @@ async fn create_collection() -> mongodb::Collection<Document> {
 
 async fn get_chat(
     State(state): State<AppState>,
-    Path(chat_id): Path<u32>,
+    Path(chat_id): Path<String>,
 ) -> Result<Json<ChatResponse>, StatusCode> {
+    let object_id = ObjectId::parse_str(&chat_id).map_err(|error| {
+        eprintln!("invalid chat id {chat_id}: {error}");
+        StatusCode::BAD_REQUEST
+    })?;
+
     let document = state
         .collection
-        .find_one(doc! { "_id": chat_id as i32 })
+        .find_one(doc! { "_id": object_id })
         .await
         .map_err(|error| {
             eprintln!("failed to load chat {chat_id}: {error}");
