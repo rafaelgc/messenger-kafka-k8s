@@ -1,17 +1,33 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { ApiError } from "@/lib/api";
 import { useAuth } from "@/components/providers/auth-provider";
+import { FormEvent, useState } from "react";
 import styles from "./auth.module.css";
 
 export function SignInForm() {
   const { signIn } = useAuth();
   const [nickname, setNickname] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    signIn(nickname, password);
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      await signIn(nickname, password);
+    } catch (submitError) {
+      if (submitError instanceof ApiError) {
+        setError(submitError.message);
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -29,6 +45,7 @@ export function SignInForm() {
           placeholder="Your nickname"
           value={nickname}
           onChange={(event) => setNickname(event.target.value)}
+          disabled={isSubmitting}
           required
         />
       </div>
@@ -46,12 +63,15 @@ export function SignInForm() {
           placeholder="Enter your password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
+          disabled={isSubmitting}
           required
         />
       </div>
 
-      <button className={styles.submit} type="submit">
-        Sign in
+      {error ? <p className={styles.error}>{error}</p> : null}
+
+      <button className={styles.submit} type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "Signing in..." : "Sign in"}
       </button>
     </form>
   );

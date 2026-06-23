@@ -5,7 +5,11 @@ import { ChatPage } from "@/components/chats/chat-page";
 import { useAuth } from "@/components/providers/auth-provider";
 
 export function HomeClient() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return null;
+  }
 
   if (isAuthenticated) {
     return <ChatPage />;

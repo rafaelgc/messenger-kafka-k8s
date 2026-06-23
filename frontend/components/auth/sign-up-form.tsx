@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { ApiError } from "@/lib/api";
 import { useAuth } from "@/components/providers/auth-provider";
+import { FormEvent, useState } from "react";
 import styles from "./auth.module.css";
 
 export function SignUpForm() {
@@ -10,8 +11,9 @@ export function SignUpForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
 
@@ -20,7 +22,19 @@ export function SignUpForm() {
       return;
     }
 
-    signUp(nickname, password);
+    setIsSubmitting(true);
+
+    try {
+      await signUp(nickname, password);
+    } catch (submitError) {
+      if (submitError instanceof ApiError) {
+        setError(submitError.message);
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -38,6 +52,7 @@ export function SignUpForm() {
           placeholder="Pick a unique nickname"
           value={nickname}
           onChange={(event) => setNickname(event.target.value)}
+          disabled={isSubmitting}
           required
         />
       </div>
@@ -55,6 +70,7 @@ export function SignUpForm() {
           placeholder="Create a password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
+          disabled={isSubmitting}
           required
         />
       </div>
@@ -72,14 +88,15 @@ export function SignUpForm() {
           placeholder="Repeat your password"
           value={confirmPassword}
           onChange={(event) => setConfirmPassword(event.target.value)}
+          disabled={isSubmitting}
           required
         />
       </div>
 
       {error ? <p className={styles.error}>{error}</p> : null}
 
-      <button className={styles.submit} type="submit">
-        Create account
+      <button className={styles.submit} type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "Creating account..." : "Create account"}
       </button>
     </form>
   );
