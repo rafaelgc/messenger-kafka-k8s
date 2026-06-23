@@ -93,6 +93,23 @@ services:
       - messaging
 
   # ---------------------------------------------------------------------------
+  # Frontend (Next.js)
+  # ---------------------------------------------------------------------------
+
+  frontend:
+    image: node:22.15.0-alpine
+    container_name: messaging-frontend
+    working_dir: /app
+    command: npm run dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    networks:
+      - messaging
+
+  # ---------------------------------------------------------------------------
   # Message Storage Service
   # ---------------------------------------------------------------------------
 
@@ -398,3 +415,4 @@ volumes:
   message_push_target:
   chat_target:
   users_target:
+  frontend_node_modules:

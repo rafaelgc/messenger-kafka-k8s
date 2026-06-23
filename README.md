@@ -38,6 +38,7 @@ When a message is sent, the Public API publishes a `message.sent` event to Kafka
 | **message-storage** | Rust | — | Consumes `message.sent` and stores message payloads in `storage-mongodb`. |
 | **message-delivery** | Rust | 8081 | Maintains WebSocket connections with online clients. Consumes `message.sent` and delivers messages in real time. |
 | **message-push** | Rust | — | Consumes `message.sent` and sends push notifications to offline users. Stores device tokens in `push-mongodb`. Uses a dummy connector for now (no real Google/Apple integration). |
+| **frontend** | Next.js | 3000 | Web UI. Dev server with hot reload via `npm run dev`. Available at http://localhost:3000 |
 
 ## Getting started
 
@@ -59,8 +60,15 @@ Application services use a shared dev image (`services/Dockerfile.dev`) with:
 
 Edit code on the host; the running container picks up changes without rebuilding the image.
 
+The **frontend** service uses `node:22.15.0-alpine` with the `frontend/` directory bind-mounted. On first run, install dependencies inside the container:
+
+```bash
+docker compose run --rm frontend npm install
+docker compose up frontend
+```
+
+See `.env.example` for configurable environment variables.
+
 ### Production images
 
 Each service also has a multi-stage `services/<name>/Dockerfile` for production or CI builds. Those compile a release binary into a minimal runtime image and are not used by `docker compose up`.
-
-See `.env.example` for configurable environment variables.
