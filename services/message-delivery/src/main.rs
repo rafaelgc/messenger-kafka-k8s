@@ -9,6 +9,7 @@ use axum::{
 };
 use dashmap::DashMap;
 use futures::StreamExt;
+use jsonwebtoken::{decode, DecodingKey, Validation};
 use rdkafka::{
     config::ClientConfig,
     consumer::{Consumer, StreamConsumer},
@@ -38,6 +39,7 @@ static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 #[derive(Clone)]
 struct AppState {
     connections: Arc<DashMap<String, Vec<(ConnectionId, ConnectionTx)>>>,
+    jwt_secret: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -51,13 +53,25 @@ struct MessageSentEvent {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ClientMessage {
-    Auth { user_id: String },
+    Auth { token: String },
+}
+
+#[derive(Deserialize)]
+#[allow(dead_code)]
+struct TokenClaims {
+    sub: String,
+    nickname: String,
+    exp: usize,
 }
 
 #[tokio::main]
 async fn main() {
+    let jwt_secret = std::env::var("JWT_SECRET")
+        .unwrap_or_else(|_| "dev-jwt-secret-change-in-production".into());
+
     let state = AppState {
         connections: Arc::new(DashMap::new()),
+        jwt_secret,
     };
 
     tokio::select! {
@@ -188,11 +202,12 @@ fn handle_client_message(
         .map_err(|error| format!("invalid JSON: {error}"))?;
 
     match message {
-        ClientMessage::Auth { user_id: authenticated_user_id } => {
-            // TODO: Replace self-reported user_id with verification of an auth token.
+        ClientMessage::Auth { token } => {
             if user_id.is_some() {
                 return Err("client is already authenticated".into());
             }
+
+            let authenticated_user_id = decode_token(&state.jwt_secret, &token)?;
 
             let conn_id = NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
             register_connection(state, &authenticated_user_id, conn_id, outbound_tx);
@@ -205,6 +220,16 @@ fn handle_client_message(
     }
 
     Ok(())
+}
+
+fn decode_token(jwt_secret: &str, token: &str) -> Result<String, String> {
+    decode::<TokenClaims>(
+        token,
+        &DecodingKey::from_secret(jwt_secret.as_bytes()),
+        &Validation::default(),
+    )
+    .map(|data| data.claims.sub)
+    .map_err(|error| format!("invalid auth token: {error}"))
 }
 
 async fn run_kafka_consumer(state: AppState) -> Result<(), String> {

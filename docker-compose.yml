@@ -156,6 +156,7 @@ services:
       KAFKA_BROKERS: kafka:9092
       KAFKA_CONSUMER_GROUP: message-delivery
       DELIVERY_BIND_ADDR: 0.0.0.0:8081
+      JWT_SECRET: dev-jwt-secret-change-in-production
     volumes:
       - ./services/message-delivery:/app
       - message_delivery_target:/app/target
