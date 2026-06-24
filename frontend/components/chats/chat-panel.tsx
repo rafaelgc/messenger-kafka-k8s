@@ -1,9 +1,13 @@
 "use client";
 
 import { useAuth } from "@/components/providers/auth-provider";
+import { useMessageDelivery } from "@/components/providers/message-delivery-provider";
 import { listMessages } from "@/lib/api";
 import {
+  appendNewMessage,
+  isNearBottom,
   mapApiMessageToUiMessage,
+  mapWsMessageToUiMessage,
   mergeOlderMessages,
 } from "@/lib/messages";
 import { getInitials, type Chat, type Message } from "@/lib/mock-data";
@@ -25,6 +29,7 @@ type ChatPanelProps = {
 
 export function ChatPanel({ chat }: ChatPanelProps) {
   const { user, token } = useAuth();
+  const { subscribe } = useMessageDelivery();
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -39,7 +44,9 @@ export function ChatPanel({ chat }: ChatPanelProps) {
   const shouldScrollToBottomRef = useRef(false);
 
   useEffect(() => {
-    if (!chat || !token || !user) {
+    const chatId = chat?.id;
+
+    if (!chatId || !token || !user) {
       setMessages([]);
       setHasMore(false);
       setNextCursor(null);
@@ -60,7 +67,7 @@ export function ChatPanel({ chat }: ChatPanelProps) {
       setNextCursor(null);
 
       try {
-        const response = await listMessages(token, chat.id, {
+        const response = await listMessages(token, chatId, {
           limit: MESSAGES_PAGE_SIZE,
         });
 
@@ -182,6 +189,29 @@ export function ChatPanel({ chat }: ChatPanelProps) {
 
     return () => observer.disconnect();
   }, [hasMore, isLoading, messages.length, loadOlderMessages]);
+
+  useEffect(() => {
+    const chatId = chat?.id;
+
+    if (!chatId || !user) {
+      return;
+    }
+
+    return subscribe((event) => {
+      if (event.chat_id !== chatId) {
+        return;
+      }
+
+      const incoming = mapWsMessageToUiMessage(event, user.id, user.nickname);
+
+      setMessages((current) => appendNewMessage(current, incoming));
+
+      const list = messageListRef.current;
+      if (list && isNearBottom(list)) {
+        shouldScrollToBottomRef.current = true;
+      }
+    });
+  }, [chat?.id, subscribe, user?.id, user?.nickname]);
 
   if (!chat) {
     return (

@@ -1,4 +1,5 @@
 import type { MessageItem } from "@/lib/api";
+import type { MessageSentEvent } from "@/lib/message-delivery";
 import type { Message } from "@/lib/mock-data";
 
 function objectIdToIsoDate(objectId: string): string {
@@ -31,3 +32,51 @@ export function mergeOlderMessages(
   const uniqueOlder = older.filter((message) => !existingIds.has(message.id));
   return [...uniqueOlder, ...existing];
 }
+
+export function mapWsMessageToUiMessage(
+  event: MessageSentEvent,
+  currentUserId: string,
+  currentUserNickname: string,
+): Message {
+  return {
+    id: `ws-${crypto.randomUUID()}`,
+    senderId: event.sender_id,
+    senderName:
+      event.sender_id === currentUserId
+        ? currentUserNickname
+        : event.sender_id.slice(0, 8),
+    text: event.text,
+    sentAt: new Date().toISOString(),
+  };
+}
+
+export function appendNewMessage(
+  existing: Message[],
+  incoming: Message,
+): Message[] {
+  if (existing.some((message) => message.id === incoming.id)) {
+    return existing;
+  }
+
+  const last = existing[existing.length - 1];
+  if (
+    last &&
+    last.senderId === incoming.senderId &&
+    last.text === incoming.text &&
+    Math.abs(
+      new Date(last.sentAt).getTime() - new Date(incoming.sentAt).getTime(),
+    ) < 5000
+  ) {
+    return existing;
+  }
+
+  return [...existing, incoming];
+}
+
+function isNearBottom(element: HTMLElement, threshold = 120): boolean {
+  return (
+    element.scrollHeight - element.scrollTop - element.clientHeight < threshold
+  );
+}
+
+export { isNearBottom };
