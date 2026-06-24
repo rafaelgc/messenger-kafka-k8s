@@ -19,3 +19,16 @@ export function createMessage(overrides: Partial<import("@/lib/mock-data").Messa
     ...overrides,
   };
 }
+
+export function createChat(overrides: Partial<import("@/lib/mock-data").Chat> = {}) {
+  return {
+    id: "chat-1",
+    name: "Design Team",
+    avatarColor: "#6366f1",
+    lastMessage: "See you at standup.",
+    lastMessageAt: "2026-06-23T08:30:00.000Z",
+    unreadCount: 0,
+    messages: [],
+    ...overrides,
+  };
+}
