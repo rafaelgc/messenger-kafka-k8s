@@ -31,10 +31,14 @@ export function ChatList({ chats, selectedChatId, onSelectChat }: ChatListProps)
                 {getInitials(chat.name)}
               </span>
               <span className={styles.chatName}>{chat.name}</span>
-              <span className={styles.chatTime}>
-                {formatChatListTime(chat.lastMessageAt)}
-              </span>
-              <span className={styles.chatPreview}>{chat.lastMessage}</span>
+              {chat.lastMessage ? (
+                <>
+                  <span className={styles.chatTime}>
+                    {formatChatListTime(chat.lastMessageAt)}
+                  </span>
+                  <span className={styles.chatPreview}>{chat.lastMessage}</span>
+                </>
+              ) : null}
               {chat.unreadCount ? (
                 <span className={styles.unreadBadge}>{chat.unreadCount}</span>
               ) : null}

@@ -1,8 +1,14 @@
 "use client";
 
 import { useAuth } from "@/components/providers/auth-provider";
+import { useMessageDelivery } from "@/components/providers/message-delivery-provider";
 import { listChats } from "@/lib/api";
-import { mapApiChatsToUiChats } from "@/lib/chats";
+import {
+  loadLastMessagePreviews,
+  mapApiChatsToUiChats,
+  updateChatLastMessage,
+} from "@/lib/chats";
+import { lastMessagePreviewFromWsEvent } from "@/lib/messages";
 import { type Chat } from "@/lib/mock-data";
 import { useEffect, useMemo, useState } from "react";
 import { ChatList } from "./chat-list";
@@ -11,15 +17,19 @@ import styles from "./chats.module.css";
 
 export function ChatPage() {
   const { user, token, signOut } = useAuth();
+  const { subscribe } = useMessageDelivery();
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [chatsError, setChatsError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token) {
+    if (!token || !user) {
       return;
     }
+
+    const authToken = token;
+    const currentUser = user;
 
     let cancelled = false;
 
@@ -28,18 +38,29 @@ export function ChatPage() {
       setChatsError(null);
 
       try {
-        const response = await listChats(token);
+        const response = await listChats(authToken);
         if (cancelled) {
           return;
         }
 
-        const nextChats = mapApiChatsToUiChats(response.chats);
-        setChats(nextChats);
+        const uiChats = mapApiChatsToUiChats(response.chats);
+        const chatsWithPreviews = await loadLastMessagePreviews(
+          authToken,
+          uiChats,
+          currentUser.id,
+          currentUser.nickname,
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        setChats(chatsWithPreviews);
         setSelectedChatId((current) => {
-          if (current && nextChats.some((chat) => chat.id === current)) {
+          if (current && chatsWithPreviews.some((chat) => chat.id === current)) {
             return current;
           }
-          return nextChats[0]?.id ?? null;
+          return chatsWithPreviews[0]?.id ?? null;
         });
       } catch (error) {
         if (!cancelled) {
@@ -59,7 +80,31 @@ export function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, user?.id, user?.nickname]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    return subscribe((event) => {
+      setChats((current) => {
+        const chat = current.find((entry) => entry.id === event.chat_id);
+        if (!chat) {
+          return current;
+        }
+
+        const preview = lastMessagePreviewFromWsEvent(
+          event,
+          chat.members,
+          user.id,
+          user.nickname,
+        );
+
+        return updateChatLastMessage(current, event.chat_id, preview);
+      });
+    });
+  }, [subscribe, user?.id, user?.nickname]);
 
   const selectedChat = useMemo(
     () => chats.find((chat) => chat.id === selectedChatId) ?? null,

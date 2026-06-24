@@ -24,6 +24,70 @@ export function resolveSenderName(
   );
 }
 
+export function formatChatListPreview(
+  text: string,
+  senderId: string,
+  members: ChatMember[],
+  currentUserId: string,
+  currentUserNickname: string,
+): string {
+  if (senderId === currentUserId) {
+    return `You: ${text}`;
+  }
+
+  const senderName = resolveSenderName(
+    senderId,
+    members,
+    currentUserId,
+    currentUserNickname,
+  );
+
+  return `${senderName}: ${text}`;
+}
+
+export function lastMessagePreviewFromMessageItem(
+  item: MessageItem,
+  members: ChatMember[],
+  currentUserId: string,
+  currentUserNickname: string,
+): { lastMessage: string; lastMessageAt: string } {
+  const uiMessage = mapApiMessageToUiMessage(
+    item,
+    members,
+    currentUserId,
+    currentUserNickname,
+  );
+
+  return {
+    lastMessage: formatChatListPreview(
+      uiMessage.text,
+      item.sender_id,
+      members,
+      currentUserId,
+      currentUserNickname,
+    ),
+    lastMessageAt: uiMessage.sentAt,
+  };
+}
+
+export function lastMessagePreviewFromWsEvent(
+  event: MessageSentEvent,
+  members: ChatMember[],
+  currentUserId: string,
+  currentUserNickname: string,
+): { lastMessage: string; lastMessageAt: string } {
+  return {
+    lastMessage: formatChatListPreview(
+      event.text,
+      event.sender_id,
+      members,
+      currentUserId,
+      currentUserNickname,
+    ),
+    lastMessageAt: new Date().toISOString(),
+  };
+}
+
 export function mapApiMessageToUiMessage(
   item: MessageItem,
   members: ChatMember[],

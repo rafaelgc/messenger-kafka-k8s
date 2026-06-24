@@ -35,6 +35,7 @@ describe("ChatPage integration", () => {
     expect(screen.getByRole("button", { name: /Design Team/i })).toBeInTheDocument();
     expect(screen.getByText("Hello from the team")).toBeInTheDocument();
     expect(screen.getByText("carol")).toBeInTheDocument();
+    expect(screen.getByText("carol: Hello from the team")).toBeInTheDocument();
     expect(screen.getByText("Signed in as")).toBeInTheDocument();
     expect(screen.getByText("alice")).toBeInTheDocument();
   });
@@ -123,9 +124,10 @@ describe("ChatPage integration", () => {
     });
 
     expect(await screen.findByText("Live update")).toBeInTheDocument();
+    expect(screen.getByText("carol: Live update")).toBeInTheDocument();
   });
 
-  it("ignores websocket messages for other chats", async () => {
+  it("updates the chat list preview for websocket messages in other chats", async () => {
     renderWithProviders(<ChatPage />);
 
     await waitForChatsToLoad();
@@ -138,8 +140,9 @@ describe("ChatPage integration", () => {
       recipient_ids: ["user-1", "user-3"],
     });
 
-    await waitFor(() => {
-      expect(screen.queryByText("Wrong chat message")).not.toBeInTheDocument();
-    });
+    expect(
+      await screen.findByText("bob: Wrong chat message"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Wrong chat message")).not.toBeInTheDocument();
   });
 });

@@ -68,9 +68,15 @@ export function createChatApiHandlers({
         pagination: { has_more: false },
       });
     }),
-    http.get(`${API_BASE_URL}/chats/:chatId/messages`, ({ params }) => {
+    http.get(`${API_BASE_URL}/chats/:chatId/messages`, ({ params, request }) => {
       const chatId = String(params.chatId);
-      const messages = messagesByChatId[chatId] ?? [];
+      const allMessages = messagesByChatId[chatId] ?? [];
+      const limitParam = new URL(request.url).searchParams.get("limit");
+      const limit = limitParam ? Number.parseInt(limitParam, 10) : undefined;
+      const messages =
+        limit !== undefined && Number.isFinite(limit)
+          ? allMessages.slice(-limit)
+          : allMessages;
 
       return HttpResponse.json({
         messages,

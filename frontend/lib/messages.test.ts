@@ -3,6 +3,7 @@ import type { ChatMember } from "@/lib/api";
 import {
   appendNewMessage,
   createOptimisticMessage,
+  formatChatListPreview,
   isNearBottom,
   mapApiMessageToUiMessage,
   mergeOlderMessages,
@@ -25,6 +26,20 @@ describe("resolveSenderName", () => {
 
   it("returns the member nickname for other users", () => {
     expect(resolveSenderName("user-2", members, "user-1", "Alice")).toBe("Bob");
+  });
+});
+
+describe("formatChatListPreview", () => {
+  it("prefixes own messages with You", () => {
+    expect(
+      formatChatListPreview("On my way", "user-1", members, "user-1", "Alice"),
+    ).toBe("You: On my way");
+  });
+
+  it("prefixes other messages with the sender nickname", () => {
+    expect(
+      formatChatListPreview("Hey", "user-2", members, "user-1", "Alice"),
+    ).toBe("Bob: Hey");
   });
 });
 
