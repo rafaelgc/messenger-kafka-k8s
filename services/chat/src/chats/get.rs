@@ -6,12 +6,12 @@ use axum::{
 use mongodb::bson::{doc, oid::ObjectId};
 use serde::Serialize;
 
-use crate::AppState;
+use crate::{AppState, ChatMember};
 
 #[derive(Serialize)]
 pub(crate) struct ChatResponse {
     name: String,
-    members: Vec<String>,
+    members: Vec<ChatMember>,
 }
 
 pub(crate) async fn get_chat(

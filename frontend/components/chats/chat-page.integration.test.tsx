@@ -34,6 +34,7 @@ describe("ChatPage integration", () => {
     expect(screen.getByRole("heading", { name: "Design Team" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Design Team/i })).toBeInTheDocument();
     expect(screen.getByText("Hello from the team")).toBeInTheDocument();
+    expect(screen.getByText("carol")).toBeInTheDocument();
     expect(screen.getByText("Signed in as")).toBeInTheDocument();
     expect(screen.getByText("alice")).toBeInTheDocument();
   });

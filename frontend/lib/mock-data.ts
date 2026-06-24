@@ -1,3 +1,5 @@
+import type { ChatMember } from "@/lib/api";
+
 export type Message = {
   id: string;
   senderId: string;
@@ -13,6 +15,7 @@ export type Chat = {
   lastMessage: string;
   lastMessageAt: string;
   unreadCount?: number;
+  members: ChatMember[];
   messages: Message[];
 };
 
@@ -24,6 +27,7 @@ export const MOCK_CHATS: Chat[] = [
     lastMessage: "Carol: I'll share the mockups after lunch.",
     lastMessageAt: "2026-06-23T11:42:00.000Z",
     unreadCount: 2,
+    members: [],
     messages: [
       {
         id: "m1",
@@ -68,6 +72,7 @@ export const MOCK_CHATS: Chat[] = [
     avatarColor: "#0ea5e9",
     lastMessage: "See you at standup.",
     lastMessageAt: "2026-06-23T08:30:00.000Z",
+    members: [],
     messages: [
       {
         id: "m6",
@@ -98,6 +103,7 @@ export const MOCK_CHATS: Chat[] = [
     avatarColor: "#10b981",
     lastMessage: "You: Sounds good to me!",
     lastMessageAt: "2026-06-22T19:10:00.000Z",
+    members: [],
     messages: [
       {
         id: "m9",
@@ -128,6 +134,7 @@ export const MOCK_CHATS: Chat[] = [
     avatarColor: "#f59e0b",
     lastMessage: "Thanks for the quick review!",
     lastMessageAt: "2026-06-21T16:20:00.000Z",
+    members: [],
     messages: [
       {
         id: "m12",

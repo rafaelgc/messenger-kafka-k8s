@@ -12,11 +12,17 @@ pub(crate) struct AppState {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub(crate) struct ChatMember {
+    id: String,
+    nickname: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) struct StoredChat {
     #[serde(rename = "_id")]
     id: ObjectId,
     name: String,
-    members: Vec<String>,
+    members: Vec<ChatMember>,
 }
 
 #[tokio::main]
@@ -49,7 +55,7 @@ async fn create_collection() -> Collection<StoredChat> {
 
 async fn ensure_members_index(collection: &Collection<StoredChat>) {
     let index = IndexModel::builder()
-        .keys(doc! { "members": 1 })
+        .keys(doc! { "members.id": 1 })
         .build();
 
     if let Err(error) = collection.create_index(index).await {

@@ -20,10 +20,15 @@ type AuthenticateResponse = {
   token: string;
 };
 
+export type ChatMember = {
+  id: string;
+  nickname: string;
+};
+
 export type ChatListItem = {
   id: string;
   name: string;
-  members: string[];
+  members: ChatMember[];
 };
 
 export type PaginationMeta = {

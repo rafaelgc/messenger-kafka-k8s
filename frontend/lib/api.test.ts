@@ -53,14 +53,26 @@ describe("api client", () => {
         expect(request.headers.get("Authorization")).toBe("Bearer jwt-token");
 
         return HttpResponse.json({
-          chats: [{ id: "chat-1", name: "Design Team", members: ["user-1"] }],
+          chats: [
+            {
+              id: "chat-1",
+              name: "Design Team",
+              members: [{ id: "user-1", nickname: "alice" }],
+            },
+          ],
           pagination: { has_more: false },
         });
       }),
     );
 
     await expect(listChats("jwt-token")).resolves.toEqual({
-      chats: [{ id: "chat-1", name: "Design Team", members: ["user-1"] }],
+      chats: [
+        {
+          id: "chat-1",
+          name: "Design Team",
+          members: [{ id: "user-1", nickname: "alice" }],
+        },
+      ],
       pagination: { has_more: false },
     });
   });

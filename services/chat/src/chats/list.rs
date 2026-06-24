@@ -8,7 +8,7 @@ use mongodb::bson::{doc, oid::ObjectId};
 use mongodb::options::FindOptions;
 use serde::{Deserialize, Serialize};
 
-use crate::{AppState, StoredChat};
+use crate::{AppState, ChatMember, StoredChat};
 
 const DEFAULT_LIMIT: u32 = 20;
 const MAX_LIMIT: u32 = 100;
@@ -24,7 +24,7 @@ pub(crate) struct ListChatsQuery {
 struct ChatListItem {
     id: String,
     name: String,
-    members: Vec<String>,
+    members: Vec<ChatMember>,
 }
 
 #[derive(Serialize)]
@@ -51,7 +51,7 @@ pub(crate) async fn list_chats(
     let limit = query.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
     let fetch_limit = (limit + 1) as i64;
 
-    let mut filter = doc! { "members": &query.member_id };
+    let mut filter = doc! { "members.id": &query.member_id };
 
     if let Some(before) = &query.before {
         let before_id = ObjectId::parse_str(before).map_err(|error| {

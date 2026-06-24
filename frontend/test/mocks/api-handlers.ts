@@ -4,16 +4,22 @@ import { http, HttpResponse } from "msw";
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
+export const testChatMembers = {
+  alice: { id: "user-1", nickname: "alice" },
+  carol: { id: "user-2", nickname: "carol" },
+  bob: { id: "user-3", nickname: "bob" },
+} as const;
+
 export const defaultTestChats: ChatListItem[] = [
   {
     id: "chat-1",
     name: "Design Team",
-    members: ["user-1", "user-2"],
+    members: [testChatMembers.alice, testChatMembers.carol],
   },
   {
     id: "chat-2",
     name: "Bob",
-    members: ["user-1", "user-3"],
+    members: [testChatMembers.alice, testChatMembers.bob],
   },
 ];
 

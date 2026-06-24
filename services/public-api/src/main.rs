@@ -89,17 +89,24 @@ struct SendMessageRequest {
     text: String,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+struct ChatMember {
+    id: String,
+    nickname: String,
+}
+
 #[derive(Deserialize)]
 struct ChatResponse {
+    #[allow(dead_code)]
     name: String,
-    members: Vec<String>,
+    members: Vec<ChatMember>,
 }
 
 #[derive(Serialize, Deserialize)]
 struct ChatListItem {
     id: String,
     name: String,
-    members: Vec<String>,
+    members: Vec<ChatMember>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -337,7 +344,7 @@ async fn list_messages(
     let user_id = authenticate_request(&headers, &state.jwt_secret)?;
     let members = fetch_chat_members(&state, &chat_id).await?;
 
-    if !members.contains(&user_id) {
+    if !members.iter().any(|member| member.id == user_id) {
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -390,7 +397,7 @@ async fn send_message(
     let user_id = authenticate_request(&headers, &state.jwt_secret)?;
     let members = fetch_chat_members(&state, &chat_id).await?;
 
-    if !members.contains(&user_id) {
+    if !members.iter().any(|member| member.id == user_id) {
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -400,7 +407,7 @@ async fn send_message(
         chat_id,
         text: body.text,
         sender_id: user_id,
-        recipient_ids: members,
+        recipient_ids: members.into_iter().map(|member| member.id).collect(),
     };
 
     let payload = serde_json::to_string(&event).map_err(|error| {
@@ -455,7 +462,7 @@ fn decode_token(jwt_secret: &str, token: &str) -> Result<TokenClaims, StatusCode
     })
 }
 
-async fn fetch_chat_members(state: &AppState, chat_id: &str) -> Result<Vec<String>, StatusCode> {
+async fn fetch_chat_members(state: &AppState, chat_id: &str) -> Result<Vec<ChatMember>, StatusCode> {
     let url = format!(
         "{}/chats/{chat_id}",
         state.chat_service_url.trim_end_matches('/')

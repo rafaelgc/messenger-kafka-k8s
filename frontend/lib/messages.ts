@@ -1,3 +1,4 @@
+import type { ChatMember } from "@/lib/api";
 import type { MessageItem } from "@/lib/api";
 import type { MessageSentEvent } from "@/lib/message-delivery";
 import type { Message } from "@/lib/mock-data";
@@ -7,18 +8,37 @@ function objectIdToIsoDate(objectId: string): string {
   return new Date(timestamp * 1000).toISOString();
 }
 
+export function resolveSenderName(
+  senderId: string,
+  members: ChatMember[],
+  currentUserId: string,
+  currentUserNickname: string,
+): string {
+  if (senderId === currentUserId) {
+    return currentUserNickname;
+  }
+
+  return (
+    members.find((member) => member.id === senderId)?.nickname ??
+    senderId.slice(0, 8)
+  );
+}
+
 export function mapApiMessageToUiMessage(
   item: MessageItem,
+  members: ChatMember[],
   currentUserId: string,
   currentUserNickname: string,
 ): Message {
   return {
     id: item.id,
     senderId: item.sender_id,
-    senderName:
-      item.sender_id === currentUserId
-        ? currentUserNickname
-        : item.sender_id.slice(0, 8),
+    senderName: resolveSenderName(
+      item.sender_id,
+      members,
+      currentUserId,
+      currentUserNickname,
+    ),
     text: item.text,
     sentAt: objectIdToIsoDate(item.id),
   };
@@ -35,16 +55,19 @@ export function mergeOlderMessages(
 
 export function mapWsMessageToUiMessage(
   event: MessageSentEvent,
+  members: ChatMember[],
   currentUserId: string,
   currentUserNickname: string,
 ): Message {
   return {
     id: `ws-${crypto.randomUUID()}`,
     senderId: event.sender_id,
-    senderName:
-      event.sender_id === currentUserId
-        ? currentUserNickname
-        : event.sender_id.slice(0, 8),
+    senderName: resolveSenderName(
+      event.sender_id,
+      members,
+      currentUserId,
+      currentUserNickname,
+    ),
     text: event.text,
     sentAt: new Date().toISOString(),
   };

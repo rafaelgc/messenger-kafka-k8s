@@ -83,7 +83,12 @@ export function ChatPanel({ chat }: ChatPanelProps) {
         }
 
         const uiMessages = response.messages.map((message) =>
-          mapApiMessageToUiMessage(message, user.id, user.nickname),
+          mapApiMessageToUiMessage(
+            message,
+            chat.members,
+            user.id,
+            user.nickname,
+          ),
         );
 
         setMessages(uiMessages);
@@ -212,7 +217,12 @@ export function ChatPanel({ chat }: ChatPanelProps) {
       }
 
       const olderMessages = response.messages.map((message) =>
-        mapApiMessageToUiMessage(message, user.id, user.nickname),
+        mapApiMessageToUiMessage(
+          message,
+          chat.members,
+          user.id,
+          user.nickname,
+        ),
       );
 
       isPrependingRef.current = true;
@@ -264,7 +274,12 @@ export function ChatPanel({ chat }: ChatPanelProps) {
         return;
       }
 
-      const incoming = mapWsMessageToUiMessage(event, user.id, user.nickname);
+      const incoming = mapWsMessageToUiMessage(
+        event,
+        chat.members,
+        user.id,
+        user.nickname,
+      );
 
       setMessages((current) => appendNewMessage(current, incoming));
 

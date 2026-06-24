@@ -39,6 +39,7 @@ export function createChat(overrides: Partial<import("@/lib/mock-data").Chat> = 
     lastMessage: "See you at standup.",
     lastMessageAt: "2026-06-23T08:30:00.000Z",
     unreadCount: 0,
+    members: [{ id: "user-1", nickname: "alice" }],
     messages: [],
     ...overrides,
   };

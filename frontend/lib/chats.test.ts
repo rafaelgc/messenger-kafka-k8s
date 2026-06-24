@@ -8,13 +8,17 @@ describe("mapApiChatsToUiChats", () => {
       {
         id: "chat-1",
         name: "Design Team",
-        members: ["user-1", "user-2"],
+        members: [{ id: "user-1", nickname: "alice" }, { id: "user-2", nickname: "bob" }],
       },
     ]);
 
     expect(chats[0]?.id).toBe("chat-1");
     expect(chats[0]?.name).toBe("Design Team");
     expect(chats[0]?.messages).toEqual([]);
+    expect(chats[0]?.members).toEqual([
+      { id: "user-1", nickname: "alice" },
+      { id: "user-2", nickname: "bob" },
+    ]);
   });
 
   it("reuses mock preview data when ids match", () => {
@@ -24,7 +28,7 @@ describe("mapApiChatsToUiChats", () => {
       {
         id: mockChat.id,
         name: mockChat.name,
-        members: ["user-1"],
+        members: [{ id: "user-1", nickname: "alice" }],
       },
     ]);
 
@@ -35,6 +39,7 @@ describe("mapApiChatsToUiChats", () => {
       lastMessage: mockChat.lastMessage,
       lastMessageAt: mockChat.lastMessageAt,
       unreadCount: mockChat.unreadCount,
+      members: [{ id: "user-1", nickname: "alice" }],
       messages: [],
     });
   });

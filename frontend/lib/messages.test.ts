@@ -1,4 +1,5 @@
 import { createMessage } from "@/test/utils/fixtures";
+import type { ChatMember } from "@/lib/api";
 import {
   appendNewMessage,
   createOptimisticMessage,
@@ -6,8 +7,26 @@ import {
   mapApiMessageToUiMessage,
   mergeOlderMessages,
   removeMessage,
+  resolveSenderName,
 } from "@/lib/messages";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const members: ChatMember[] = [
+  { id: "user-1", nickname: "Alice" },
+  { id: "user-2", nickname: "Bob" },
+];
+
+describe("resolveSenderName", () => {
+  it("returns the current user nickname for own messages", () => {
+    expect(resolveSenderName("user-1", members, "user-1", "Alice")).toBe(
+      "Alice",
+    );
+  });
+
+  it("returns the member nickname for other users", () => {
+    expect(resolveSenderName("user-2", members, "user-1", "Alice")).toBe("Bob");
+  });
+});
 
 describe("mapApiMessageToUiMessage", () => {
   const objectId = "649a1b2c3d4e5f6789012345";
@@ -23,6 +42,7 @@ describe("mapApiMessageToUiMessage", () => {
         text: "Hi there",
         sender_id: "user-1",
       },
+      members,
       "user-1",
       "Alice",
     );
@@ -36,7 +56,23 @@ describe("mapApiMessageToUiMessage", () => {
     });
   });
 
-  it("maps other senders to a truncated id", () => {
+  it("maps other senders to their chat member nickname", () => {
+    const message = mapApiMessageToUiMessage(
+      {
+        id: "649a1b2c3d4e5f6789012345",
+        chat_id: "chat-1",
+        text: "Hi there",
+        sender_id: "user-2",
+      },
+      members,
+      "user-1",
+      "Alice",
+    );
+
+    expect(message.senderName).toBe("Bob");
+  });
+
+  it("falls back to a truncated id when the sender is not in members", () => {
     const message = mapApiMessageToUiMessage(
       {
         id: "649a1b2c3d4e5f6789012345",
@@ -44,6 +80,7 @@ describe("mapApiMessageToUiMessage", () => {
         text: "Hi there",
         sender_id: "abcdef123456",
       },
+      members,
       "user-1",
       "Alice",
     );
