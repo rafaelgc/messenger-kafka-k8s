@@ -44,6 +44,7 @@ export function ChatPanel({ chat }: ChatPanelProps) {
   const [sendError, setSendError] = useState<string | null>(null);
 
   const messageListRef = useRef<HTMLDivElement>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const scrollHeightBeforePrepend = useRef(0);
   const isPrependingRef = useRef(false);
@@ -149,6 +150,7 @@ export function ChatPanel({ chat }: ChatPanelProps) {
       );
     } finally {
       setIsSending(false);
+      composerInputRef.current?.focus();
     }
   }, [chat?.id, draft, isLoading, isSending, token, user]);
 
@@ -351,18 +353,20 @@ export function ChatPanel({ chat }: ChatPanelProps) {
         ) : null}
         <div className={styles.composerRow}>
           <textarea
+            ref={composerInputRef}
             className={styles.composerInput}
             rows={1}
             placeholder="Type a message"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={handleComposerKeyDown}
-            disabled={!chat || isLoading || isSending}
+            disabled={isLoading}
             aria-label="Message input"
           />
           <button
             className={styles.composerSend}
             type="button"
+            onMouseDown={(event) => event.preventDefault()}
             onClick={() => void handleSend()}
             disabled={!canSend}
             aria-label="Send"
