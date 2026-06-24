@@ -93,7 +93,38 @@ struct SendMessageRequest {
 
 #[derive(Deserialize)]
 struct ChatResponse {
+    name: String,
     members: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ChatListItem {
+    id: String,
+    name: String,
+    members: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct PaginatedChatsResponse {
+    chats: Vec<ChatListItem>,
+    pagination: PaginationMeta,
+}
+
+#[derive(Deserialize, Serialize)]
+struct ListChatsQuery {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    limit: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    before: Option<String>,
+}
+
+#[derive(Serialize)]
+struct ListChatsForwardQuery {
+    member_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    limit: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    before: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -147,6 +178,7 @@ async fn main() {
         .route("/", get(home))
         .route("/users", post(create_user))
         .route("/authentications", post(authenticate))
+        .route("/chats", get(list_chats))
         .route(
             "/chats/{chat_id}/messages",
             get(list_messages).post(send_message),
@@ -244,6 +276,55 @@ async fn authenticate(
 
 fn upstream_status(status: reqwest::StatusCode) -> StatusCode {
     StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY)
+}
+
+async fn list_chats(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<ListChatsQuery>,
+) -> Result<Json<PaginatedChatsResponse>, StatusCode> {
+    let user_id = authenticate_request(&headers, &state.jwt_secret)?;
+
+    let url = format!(
+        "{}/chats",
+        state.chat_service_url.trim_end_matches('/')
+    );
+
+    let response = state
+        .http_client
+        .get(&url)
+        .query(&ListChatsForwardQuery {
+            member_id: user_id,
+            limit: query.limit,
+            before: query.before,
+        })
+        .send()
+        .await
+        .map_err(|error| {
+            eprintln!("failed to call chat service to list chats: {error}");
+            StatusCode::BAD_GATEWAY
+        })?;
+
+    if response.status() == reqwest::StatusCode::BAD_REQUEST {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if !response.status().is_success() {
+        eprintln!(
+            "chat service returned {} when listing chats",
+            response.status()
+        );
+        return Err(StatusCode::BAD_GATEWAY);
+    }
+
+    response
+        .json::<PaginatedChatsResponse>()
+        .await
+        .map_err(|error| {
+            eprintln!("failed to decode chat service list response: {error}");
+            StatusCode::BAD_GATEWAY
+        })
+        .map(Json)
 }
 
 // NOTE: Membership is checked at request time only. Storage returns every message
