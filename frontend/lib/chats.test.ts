@@ -1,4 +1,4 @@
-import { mapApiChatsToUiChats } from "@/lib/chats";
+import { mapApiChatsToUiChats, resolveChatDisplayName } from "@/lib/chats";
 import { describe, expect, it } from "vitest";
 
 describe("mapApiChatsToUiChats", () => {
@@ -29,5 +29,33 @@ describe("mapApiChatsToUiChats", () => {
     ]);
 
     expect(chats[0]?.avatarColor).not.toBe(chats[1]?.avatarColor);
+  });
+});
+
+describe("resolveChatDisplayName", () => {
+  it("shows the other member nickname for two-person chats", () => {
+    const chat = {
+      name: "Design Team",
+      members: [
+        { id: "user-1", nickname: "alice" },
+        { id: "user-2", nickname: "carol" },
+      ],
+    };
+
+    expect(resolveChatDisplayName(chat, "user-1")).toBe("carol");
+    expect(resolveChatDisplayName(chat, "user-2")).toBe("alice");
+  });
+
+  it("keeps the chat name for group chats", () => {
+    const chat = {
+      name: "Design Team",
+      members: [
+        { id: "user-1", nickname: "alice" },
+        { id: "user-2", nickname: "carol" },
+        { id: "user-3", nickname: "bob" },
+      ],
+    };
+
+    expect(resolveChatDisplayName(chat, "user-1")).toBe("Design Team");
   });
 });

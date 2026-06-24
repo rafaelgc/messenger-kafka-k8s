@@ -19,6 +19,35 @@ function avatarColorForName(name: string): string {
   return AVATAR_COLORS[hash]!;
 }
 
+export function resolveChatDisplayName(
+  chat: Pick<Chat, "name" | "members">,
+  currentUserId: string,
+): string {
+  if (chat.members.length === 2) {
+    const otherMember = chat.members.find(
+      (member) => member.id !== currentUserId,
+    );
+    if (otherMember) {
+      return otherMember.nickname;
+    }
+  }
+
+  return chat.name;
+}
+
+export function getChatListPresentation(
+  chat: Chat,
+  currentUserId: string,
+): { displayName: string; avatarColor: string } {
+  const displayName = resolveChatDisplayName(chat, currentUserId);
+  const avatarColor =
+    chat.members.length === 2
+      ? avatarColorForName(displayName)
+      : chat.avatarColor;
+
+  return { displayName, avatarColor };
+}
+
 export function mapApiChatsToUiChats(apiChats: ChatListItem[]): Chat[] {
   return apiChats.map((chat) => ({
     id: chat.id,
@@ -31,6 +60,9 @@ export function mapApiChatsToUiChats(apiChats: ChatListItem[]): Chat[] {
   }));
 }
 
+// TODO: Lazy-load last message previews — fetch GET /chats/:id/messages?limit=1
+// only when the corresponding chat list item is visible in the viewport
+// (e.g. IntersectionObserver on ChatList items).
 export async function loadLastMessagePreviews(
   token: string,
   chats: Chat[],

@@ -130,13 +130,14 @@ export function ChatPage() {
           <p className={styles.sidebarStatus}>{chatsError}</p>
         ) : chats.length === 0 ? (
           <p className={styles.sidebarStatus}>No chats yet.</p>
-        ) : (
+        ) : user ? (
           <ChatList
             chats={chats}
+            currentUserId={user.id}
             selectedChatId={selectedChatId}
             onSelectChat={setSelectedChatId}
           />
-        )}
+        ) : null}
       </aside>
 
       <ChatPanel chat={selectedChat} />

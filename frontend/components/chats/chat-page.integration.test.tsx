@@ -32,9 +32,8 @@ describe("ChatPage integration", () => {
     await waitForMessagesToLoad();
 
     expect(screen.getByRole("heading", { name: "Design Team" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Design Team/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /carol/i })).toBeInTheDocument();
     expect(screen.getByText("Hello from the team")).toBeInTheDocument();
-    expect(screen.getByText("carol")).toBeInTheDocument();
     expect(screen.getByText("carol: Hello from the team")).toBeInTheDocument();
     expect(screen.getByText("Signed in as")).toBeInTheDocument();
     expect(screen.getByText("alice")).toBeInTheDocument();
@@ -49,7 +48,7 @@ describe("ChatPage integration", () => {
     await waitForMessagesToLoad();
     expect(screen.getByText("Hello from the team")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Bob/i }));
+    await user.click(screen.getByRole("button", { name: /bob/i }));
 
     await waitForMessagesToLoad();
     expect(screen.getByText("See you at standup")).toBeInTheDocument();

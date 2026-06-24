@@ -1,18 +1,29 @@
 import { formatChatListTime } from "@/lib/format";
+import { getChatListPresentation } from "@/lib/chats";
 import { getInitials, type Chat } from "@/lib/mock-data";
 import styles from "./chats.module.css";
 
 type ChatListProps = {
   chats: Chat[];
+  currentUserId: string;
   selectedChatId: string | null;
   onSelectChat: (chatId: string) => void;
 };
 
-export function ChatList({ chats, selectedChatId, onSelectChat }: ChatListProps) {
+export function ChatList({
+  chats,
+  currentUserId,
+  selectedChatId,
+  onSelectChat,
+}: ChatListProps) {
   return (
     <ul className={styles.chatList}>
       {chats.map((chat) => {
         const isActive = chat.id === selectedChatId;
+        const { displayName, avatarColor } = getChatListPresentation(
+          chat,
+          currentUserId,
+        );
 
         return (
           <li key={chat.id}>
@@ -25,12 +36,12 @@ export function ChatList({ chats, selectedChatId, onSelectChat }: ChatListProps)
             >
               <span
                 className={styles.avatar}
-                style={{ backgroundColor: chat.avatarColor }}
+                style={{ backgroundColor: avatarColor }}
                 aria-hidden
               >
-                {getInitials(chat.name)}
+                {getInitials(displayName)}
               </span>
-              <span className={styles.chatName}>{chat.name}</span>
+              <span className={styles.chatName}>{displayName}</span>
               {chat.lastMessage ? (
                 <>
                   <span className={styles.chatTime}>
