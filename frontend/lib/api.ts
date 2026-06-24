@@ -170,3 +170,25 @@ export async function listMessages(
 
   return response.json() as Promise<PaginatedMessagesResponse>;
 }
+
+export async function sendMessage(
+  token: string,
+  chatId: string,
+  text: string,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/chats/${encodeURIComponent(chatId)}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text }),
+    },
+  );
+
+  if (!response.ok) {
+    await parseError(response, "Could not send your message.");
+  }
+}

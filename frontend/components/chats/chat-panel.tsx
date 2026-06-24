@@ -2,13 +2,15 @@
 
 import { useAuth } from "@/components/providers/auth-provider";
 import { useMessageDelivery } from "@/components/providers/message-delivery-provider";
-import { listMessages } from "@/lib/api";
+import { listMessages, sendMessage } from "@/lib/api";
 import {
   appendNewMessage,
+  createOptimisticMessage,
   isNearBottom,
   mapApiMessageToUiMessage,
   mapWsMessageToUiMessage,
   mergeOlderMessages,
+  removeMessage,
 } from "@/lib/messages";
 import { getInitials, type Chat, type Message } from "@/lib/mock-data";
 import {
@@ -17,6 +19,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type KeyboardEvent,
 } from "react";
 import { MessageBubble } from "./message-bubble";
 import styles from "./chats.module.css";
@@ -36,6 +39,9 @@ export function ChatPanel({ chat }: ChatPanelProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const messageListRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
@@ -104,6 +110,60 @@ export function ChatPanel({ chat }: ChatPanelProps) {
       cancelled = true;
     };
   }, [chat?.id, token, user?.id, user?.nickname]);
+
+  useEffect(() => {
+    setDraft("");
+    setSendError(null);
+    setIsSending(false);
+  }, [chat?.id]);
+
+  const handleSend = useCallback(async () => {
+    const chatId = chat?.id;
+    const text = draft.trim();
+
+    if (!chatId || !token || !user || !text || isSending || isLoading) {
+      return;
+    }
+
+    const optimisticMessage = createOptimisticMessage(
+      text,
+      user.id,
+      user.nickname,
+    );
+
+    setDraft("");
+    setSendError(null);
+    setIsSending(true);
+    setMessages((current) => appendNewMessage(current, optimisticMessage));
+    shouldScrollToBottomRef.current = true;
+
+    try {
+      await sendMessage(token, chatId, text);
+    } catch (sendFailure) {
+      setMessages((current) => removeMessage(current, optimisticMessage.id));
+      setDraft(text);
+      setSendError(
+        sendFailure instanceof Error
+          ? sendFailure.message
+          : "Could not send your message.",
+      );
+    } finally {
+      setIsSending(false);
+    }
+  }, [chat?.id, draft, isLoading, isSending, token, user]);
+
+  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void handleSend();
+    }
+  };
+
+  const canSend =
+    Boolean(chat?.id && token && user) &&
+    draft.trim().length > 0 &&
+    !isSending &&
+    !isLoading;
 
   useLayoutEffect(() => {
     if (!shouldScrollToBottomRef.current || !messageListRef.current) {
@@ -284,16 +344,32 @@ export function ChatPanel({ chat }: ChatPanelProps) {
       </div>
 
       <footer className={styles.composer}>
-        <textarea
-          className={styles.composerInput}
-          rows={1}
-          placeholder="Type a message"
-          disabled
-          aria-label="Message input"
-        />
-        <button className={styles.composerSend} type="button" disabled aria-label="Send">
-          ↑
-        </button>
+        {sendError ? (
+          <p className={styles.composerError} role="alert">
+            {sendError}
+          </p>
+        ) : null}
+        <div className={styles.composerRow}>
+          <textarea
+            className={styles.composerInput}
+            rows={1}
+            placeholder="Type a message"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={handleComposerKeyDown}
+            disabled={!chat || isLoading || isSending}
+            aria-label="Message input"
+          />
+          <button
+            className={styles.composerSend}
+            type="button"
+            onClick={() => void handleSend()}
+            disabled={!canSend}
+            aria-label="Send"
+          >
+            ↑
+          </button>
+        </div>
       </footer>
     </section>
   );

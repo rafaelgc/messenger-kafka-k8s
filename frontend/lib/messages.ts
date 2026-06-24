@@ -50,10 +50,37 @@ export function mapWsMessageToUiMessage(
   };
 }
 
+export function createOptimisticMessage(
+  text: string,
+  currentUserId: string,
+  currentUserNickname: string,
+): Message {
+  return {
+    id: `pending-${crypto.randomUUID()}`,
+    senderId: currentUserId,
+    senderName: currentUserNickname,
+    text,
+    sentAt: new Date().toISOString(),
+  };
+}
+
 export function appendNewMessage(
   existing: Message[],
   incoming: Message,
 ): Message[] {
+  const pendingIndex = existing.findIndex(
+    (message) =>
+      message.id.startsWith("pending-") &&
+      message.senderId === incoming.senderId &&
+      message.text === incoming.text,
+  );
+
+  if (pendingIndex >= 0) {
+    const next = [...existing];
+    next[pendingIndex] = incoming;
+    return next;
+  }
+
   if (existing.some((message) => message.id === incoming.id)) {
     return existing;
   }
@@ -71,6 +98,10 @@ export function appendNewMessage(
   }
 
   return [...existing, incoming];
+}
+
+export function removeMessage(existing: Message[], messageId: string): Message[] {
+  return existing.filter((message) => message.id !== messageId);
 }
 
 function isNearBottom(element: HTMLElement, threshold = 120): boolean {
