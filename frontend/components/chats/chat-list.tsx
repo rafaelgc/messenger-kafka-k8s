@@ -1,5 +1,5 @@
 import { formatChatListTime } from "@/lib/format";
-import { getChatListPresentation } from "@/lib/chats";
+import { getChatPresentation } from "@/lib/chats";
 import { getInitials, type Chat } from "@/lib/mock-data";
 import styles from "./chats.module.css";
 
@@ -20,7 +20,7 @@ export function ChatList({
     <ul className={styles.chatList}>
       {chats.map((chat) => {
         const isActive = chat.id === selectedChatId;
-        const { displayName, avatarColor } = getChatListPresentation(
+        const { displayName, avatarColor } = getChatPresentation(
           chat,
           currentUserId,
         );

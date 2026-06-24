@@ -1,4 +1,4 @@
-import { mapApiChatsToUiChats, resolveChatDisplayName } from "@/lib/chats";
+import { getChatPresentation, mapApiChatsToUiChats, resolveChatDisplayName } from "@/lib/chats";
 import { describe, expect, it } from "vitest";
 
 describe("mapApiChatsToUiChats", () => {
@@ -29,6 +29,28 @@ describe("mapApiChatsToUiChats", () => {
     ]);
 
     expect(chats[0]?.avatarColor).not.toBe(chats[1]?.avatarColor);
+  });
+});
+
+describe("getChatPresentation", () => {
+  it("uses the same display name and avatar color for list and panel", () => {
+    const chat = {
+      id: "chat-1",
+      name: "Design Team",
+      avatarColor: "#000000",
+      lastMessage: "",
+      lastMessageAt: "",
+      members: [
+        { id: "user-1", nickname: "alice" },
+        { id: "user-2", nickname: "carol" },
+      ],
+      messages: [],
+    };
+
+    const presentation = getChatPresentation(chat, "user-1");
+
+    expect(presentation.displayName).toBe("carol");
+    expect(presentation.avatarColor).not.toBe(chat.avatarColor);
   });
 });
 

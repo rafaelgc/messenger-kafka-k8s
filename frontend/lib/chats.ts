@@ -1,23 +1,7 @@
 import { listMessages, type ChatListItem } from "@/lib/api";
+import { avatarColorFromNickname } from "@/lib/avatar";
 import { lastMessagePreviewFromMessageItem } from "@/lib/messages";
 import { type Chat } from "@/lib/mock-data";
-
-const AVATAR_COLORS = [
-  "#6366f1",
-  "#0ea5e9",
-  "#10b981",
-  "#f59e0b",
-  "#ec4899",
-  "#8b5cf6",
-];
-
-function avatarColorForName(name: string): string {
-  let hash = 0;
-  for (const char of name) {
-    hash = (hash + char.charCodeAt(0)) % AVATAR_COLORS.length;
-  }
-  return AVATAR_COLORS[hash]!;
-}
 
 export function resolveChatDisplayName(
   chat: Pick<Chat, "name" | "members">,
@@ -35,24 +19,23 @@ export function resolveChatDisplayName(
   return chat.name;
 }
 
-export function getChatListPresentation(
+export function getChatPresentation(
   chat: Chat,
   currentUserId: string,
 ): { displayName: string; avatarColor: string } {
   const displayName = resolveChatDisplayName(chat, currentUserId);
-  const avatarColor =
-    chat.members.length === 2
-      ? avatarColorForName(displayName)
-      : chat.avatarColor;
 
-  return { displayName, avatarColor };
+  return {
+    displayName,
+    avatarColor: avatarColorFromNickname(displayName),
+  };
 }
 
 export function mapApiChatsToUiChats(apiChats: ChatListItem[]): Chat[] {
   return apiChats.map((chat) => ({
     id: chat.id,
     name: chat.name,
-    avatarColor: avatarColorForName(chat.name),
+    avatarColor: avatarColorFromNickname(chat.name),
     lastMessage: "",
     lastMessageAt: "",
     members: chat.members,

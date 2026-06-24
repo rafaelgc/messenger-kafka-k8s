@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/components/providers/auth-provider";
 import { useMessageDelivery } from "@/components/providers/message-delivery-provider";
+import { getChatPresentation } from "@/lib/chats";
 import { listMessages, sendMessage } from "@/lib/api";
 import {
   appendNewMessage,
@@ -304,19 +305,20 @@ export function ChatPanel({ chat }: ChatPanelProps) {
   }
 
   const currentUserId = user?.id ?? "";
+  const { displayName, avatarColor } = getChatPresentation(chat, currentUserId);
 
   return (
     <section className={styles.chatPanel}>
       <header className={styles.panelHeader}>
         <span
           className={styles.panelHeaderAvatar}
-          style={{ backgroundColor: chat.avatarColor }}
+          style={{ backgroundColor: avatarColor }}
           aria-hidden
         >
-          {getInitials(chat.name)}
+          {getInitials(displayName)}
         </span>
         <div className={styles.panelHeaderInfo}>
-          <h2 className={styles.panelTitle}>{chat.name}</h2>
+          <h2 className={styles.panelTitle}>{displayName}</h2>
           <p className={styles.panelSubtitle}>
             {isLoading ? "Loading messages..." : `${messages.length} messages`}
           </p>
