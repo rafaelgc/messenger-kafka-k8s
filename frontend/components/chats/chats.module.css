@@ -231,6 +231,22 @@
   gap: 4px;
 }
 
+.messageListTop {
+  min-height: 1px;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 8px;
+}
+
+.messageListStatus {
+  margin: 0;
+  align-self: center;
+  padding: 12px 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 .messageRow {
   display: flex;
   width: 100%;

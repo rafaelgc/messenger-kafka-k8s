@@ -15,8 +15,6 @@ use tower_http::cors::CorsLayer;
 
 mod topics;
 
-const SENDER_ID: &str = "dummy_id";
-
 #[derive(Clone)]
 struct AppState {
     producer: FutureProducer,
@@ -332,12 +330,14 @@ async fn list_chats(
 // messages; users who join later see the full chat history.
 async fn list_messages(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(chat_id): Path<String>,
     Query(query): Query<ListMessagesQuery>,
 ) -> Result<Json<PaginatedMessagesResponse>, StatusCode> {
+    let user_id = authenticate_request(&headers, &state.jwt_secret)?;
     let members = fetch_chat_members(&state, &chat_id).await?;
 
-    if !members.contains(&SENDER_ID.to_string()) {
+    if !members.contains(&user_id) {
         return Err(StatusCode::FORBIDDEN);
     }
 

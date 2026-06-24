@@ -38,7 +38,7 @@ export function mapApiChatsToUiChats(apiChats: ChatListItem[]): Chat[] {
       lastMessage: mockChat?.lastMessage ?? preview.lastMessage,
       lastMessageAt: mockChat?.lastMessageAt ?? preview.lastMessageAt,
       unreadCount: mockChat?.unreadCount ?? preview.unreadCount,
-      messages: mockChat?.messages ?? [],
+      messages: [],
     };
   });
 }

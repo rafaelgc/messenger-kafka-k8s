@@ -36,6 +36,18 @@ export type PaginatedChatsResponse = {
   pagination: PaginationMeta;
 };
 
+export type MessageItem = {
+  id: string;
+  chat_id: string;
+  text: string;
+  sender_id: string;
+};
+
+export type PaginatedMessagesResponse = {
+  messages: MessageItem[];
+  pagination: PaginationMeta;
+};
+
 type ListChatsQuery = {
   limit?: number;
   before?: string;
@@ -47,6 +59,8 @@ function errorMessageForStatus(status: number, fallback: string): string {
       return "Please check your nickname and password.";
     case 401:
       return "Invalid nickname or password.";
+    case 403:
+      return "You do not have access to this chat.";
     case 409:
       return "That nickname is already taken.";
     case 502:
@@ -121,4 +135,38 @@ export async function listChats(
   }
 
   return response.json() as Promise<PaginatedChatsResponse>;
+}
+
+type ListMessagesQuery = {
+  limit?: number;
+  before?: string;
+};
+
+export async function listMessages(
+  token: string,
+  chatId: string,
+  query: ListMessagesQuery = {},
+): Promise<PaginatedMessagesResponse> {
+  const params = new URLSearchParams();
+  if (query.limit !== undefined) {
+    params.set("limit", String(query.limit));
+  }
+  if (query.before) {
+    params.set("before", query.before);
+  }
+
+  const queryString = params.toString();
+  const url = `${API_BASE_URL}/chats/${encodeURIComponent(chatId)}/messages${
+    queryString ? `?${queryString}` : ""
+  }`;
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    await parseError(response, "Could not load messages.");
+  }
+
+  return response.json() as Promise<PaginatedMessagesResponse>;
 }
