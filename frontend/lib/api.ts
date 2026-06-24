@@ -20,6 +20,27 @@ type AuthenticateResponse = {
   token: string;
 };
 
+export type ChatListItem = {
+  id: string;
+  name: string;
+  members: string[];
+};
+
+export type PaginationMeta = {
+  has_more: boolean;
+  next_cursor?: string;
+};
+
+export type PaginatedChatsResponse = {
+  chats: ChatListItem[];
+  pagination: PaginationMeta;
+};
+
+type ListChatsQuery = {
+  limit?: number;
+  before?: string;
+};
+
 function errorMessageForStatus(status: number, fallback: string): string {
   switch (status) {
     case 400:
@@ -74,4 +95,30 @@ export async function authenticate(
   }
 
   return response.json() as Promise<AuthenticateResponse>;
+}
+
+export async function listChats(
+  token: string,
+  query: ListChatsQuery = {},
+): Promise<PaginatedChatsResponse> {
+  const params = new URLSearchParams();
+  if (query.limit !== undefined) {
+    params.set("limit", String(query.limit));
+  }
+  if (query.before) {
+    params.set("before", query.before);
+  }
+
+  const queryString = params.toString();
+  const url = `${API_BASE_URL}/chats${queryString ? `?${queryString}` : ""}`;
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    await parseError(response, "Could not load your chats.");
+  }
+
+  return response.json() as Promise<PaginatedChatsResponse>;
 }

@@ -71,6 +71,13 @@
   border-color: #c7d0db;
 }
 
+.sidebarStatus {
+  margin: 0;
+  padding: 20px 16px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
 .chatList {
   flex: 1;
   overflow-y: auto;
