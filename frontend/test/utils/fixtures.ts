@@ -9,6 +9,17 @@ export function createTestToken(claims: TokenClaims): string {
   return `header.${payload}.signature`;
 }
 
+export function createValidToken(
+  overrides: Partial<TokenClaims> = {},
+): string {
+  return createTestToken({
+    sub: "user-1",
+    nickname: "alice",
+    exp: Math.floor(Date.now() / 1000) + 3_600,
+    ...overrides,
+  });
+}
+
 export function createMessage(overrides: Partial<import("@/lib/mock-data").Message> = {}) {
   return {
     id: "msg-1",
