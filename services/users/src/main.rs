@@ -3,9 +3,9 @@ use argon2::{
     Argon2,
 };
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::StatusCode,
-    routing::post,
+    routing::{get, post},
     Json, Router,
 };
 use chrono::{Duration, Utc};
@@ -64,6 +64,11 @@ struct TokenClaims {
     exp: usize,
 }
 
+#[derive(Deserialize)]
+struct GetUserQuery {
+    nickname: String,
+}
+
 #[tokio::main]
 async fn main() {
     let jwt_secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
@@ -76,7 +81,7 @@ async fn main() {
     };
 
     let app = Router::new()
-        .route("/users", post(create_user))
+        .route("/users", get(get_user).post(create_user))
         .route("/authentications", post(authenticate))
         .with_state(state);
 
@@ -190,6 +195,35 @@ async fn authenticate(
     })?;
 
     Ok(Json(AuthenticateResponse { token }))
+}
+
+async fn get_user(
+    State(state): State<AppState>,
+    Query(query): Query<GetUserQuery>,
+) -> Result<Json<CreateUserResponse>, StatusCode> {
+    if query.nickname.trim().is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let user = state
+        .collection
+        .find_one(doc! { "nickname": &query.nickname })
+        .await
+        .map_err(|error| {
+            eprintln!("failed to load user nickname={}: {error}", query.nickname);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let id = user
+        .id
+        .expect("stored user must have _id")
+        .to_hex();
+
+    Ok(Json(CreateUserResponse {
+        id,
+        nickname: user.nickname,
+    }))
 }
 
 fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {

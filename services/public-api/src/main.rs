@@ -89,6 +89,35 @@ struct SendMessageRequest {
     text: String,
 }
 
+#[derive(Deserialize)]
+struct CreateChatRequest {
+    member_nicknames: Vec<String>,
+    #[serde(default)]
+    name: String,
+}
+
+#[derive(Serialize)]
+struct CreateChatForwardRequest {
+    creator_id: String,
+    name: String,
+    member_ids: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct CreateChatResponse {
+    id: String,
+    name: String,
+    creator: ChatMember,
+    members: Vec<ChatMember>,
+}
+
+#[derive(Deserialize)]
+struct GetUserResponse {
+    id: String,
+    #[allow(dead_code)]
+    nickname: String,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 struct ChatMember {
     id: String,
@@ -99,6 +128,8 @@ struct ChatMember {
 struct ChatResponse {
     #[allow(dead_code)]
     name: String,
+    #[allow(dead_code)]
+    creator: ChatMember,
     members: Vec<ChatMember>,
 }
 
@@ -106,6 +137,7 @@ struct ChatResponse {
 struct ChatListItem {
     id: String,
     name: String,
+    creator: ChatMember,
     members: Vec<ChatMember>,
 }
 
@@ -183,7 +215,7 @@ async fn main() {
         .route("/", get(home))
         .route("/users", post(create_user))
         .route("/authentications", post(authenticate))
-        .route("/chats", get(list_chats))
+        .route("/chats", get(list_chats).post(create_chat))
         .route(
             "/chats/{chat_id}/messages",
             get(list_messages).post(send_message),
@@ -332,6 +364,81 @@ async fn list_chats(
         .map(Json)
 }
 
+async fn create_chat(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<CreateChatRequest>,
+) -> Result<(StatusCode, Json<CreateChatResponse>), StatusCode> {
+    let claims = authenticate_user(&headers, &state.jwt_secret)?;
+
+    if body.member_nicknames.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let mut seen_nicknames = std::collections::HashSet::new();
+    for nickname in &body.member_nicknames {
+        if nickname.trim().is_empty() || !seen_nicknames.insert(nickname) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
+        if nickname == &claims.nickname {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+
+    if body.member_nicknames.len() > 1 && body.name.trim().is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let mut member_ids = Vec::with_capacity(body.member_nicknames.len());
+    for nickname in &body.member_nicknames {
+        member_ids.push(lookup_user_id_by_nickname(&state, nickname).await?);
+    }
+
+    let url = format!(
+        "{}/chats",
+        state.chat_service_url.trim_end_matches('/')
+    );
+
+    let response = state
+        .http_client
+        .post(&url)
+        .json(&CreateChatForwardRequest {
+            creator_id: claims.sub,
+            name: body.name,
+            member_ids,
+        })
+        .send()
+        .await
+        .map_err(|error| {
+            eprintln!("failed to call chat service to create chat: {error}");
+            StatusCode::BAD_GATEWAY
+        })?;
+
+    let status = response.status();
+    if status == reqwest::StatusCode::BAD_REQUEST {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if status == reqwest::StatusCode::CONFLICT {
+        return Err(StatusCode::CONFLICT);
+    }
+
+    if !status.is_success() {
+        eprintln!("chat service returned {status} when creating chat");
+        return Err(StatusCode::BAD_GATEWAY);
+    }
+
+    response
+        .json::<CreateChatResponse>()
+        .await
+        .map_err(|error| {
+            eprintln!("failed to decode chat service create response: {error}");
+            StatusCode::BAD_GATEWAY
+        })
+        .map(|chat| (StatusCode::CREATED, Json(chat)))
+}
+
 // NOTE: Membership is checked at request time only. Storage returns every message
 // in the chat — there is no per-user history. Users who leave cannot access past
 // messages; users who join later see the full chat history.
@@ -433,9 +540,12 @@ async fn send_message(
 }
 
 fn authenticate_request(headers: &HeaderMap, jwt_secret: &str) -> Result<String, StatusCode> {
+    Ok(authenticate_user(headers, jwt_secret)?.sub)
+}
+
+fn authenticate_user(headers: &HeaderMap, jwt_secret: &str) -> Result<TokenClaims, StatusCode> {
     let token = bearer_token(headers)?;
-    let claims = decode_token(jwt_secret, token)?;
-    Ok(claims.sub)
+    decode_token(jwt_secret, token)
 }
 
 fn bearer_token(headers: &HeaderMap) -> Result<&str, StatusCode> {
@@ -497,4 +607,50 @@ async fn fetch_chat_members(state: &AppState, chat_id: &str) -> Result<Vec<ChatM
             StatusCode::BAD_GATEWAY
         })
         .map(|chat| chat.members)
+}
+
+async fn lookup_user_id_by_nickname(
+    state: &AppState,
+    nickname: &str,
+) -> Result<String, StatusCode> {
+    let url = format!(
+        "{}/users",
+        state.users_service_url.trim_end_matches('/')
+    );
+
+    let response = state
+        .http_client
+        .get(&url)
+        .query(&[("nickname", nickname)])
+        .send()
+        .await
+        .map_err(|error| {
+            eprintln!("failed to call users service for nickname={nickname}: {error}");
+            StatusCode::BAD_GATEWAY
+        })?;
+
+    if response.status() == reqwest::StatusCode::BAD_REQUEST {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    if !response.status().is_success() {
+        eprintln!(
+            "users service returned {} for nickname={nickname}",
+            response.status()
+        );
+        return Err(StatusCode::BAD_GATEWAY);
+    }
+
+    response
+        .json::<GetUserResponse>()
+        .await
+        .map_err(|error| {
+            eprintln!("failed to decode users service lookup for nickname={nickname}: {error}");
+            StatusCode::BAD_GATEWAY
+        })
+        .map(|user| user.id)
 }

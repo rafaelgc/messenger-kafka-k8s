@@ -22,6 +22,7 @@ pub(crate) struct StoredChat {
     #[serde(rename = "_id")]
     id: ObjectId,
     name: String,
+    creator: ChatMember,
     members: Vec<ChatMember>,
 }
 

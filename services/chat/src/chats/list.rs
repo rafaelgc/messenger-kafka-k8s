@@ -24,6 +24,7 @@ pub(crate) struct ListChatsQuery {
 struct ChatListItem {
     id: String,
     name: String,
+    creator: ChatMember,
     members: Vec<ChatMember>,
 }
 
@@ -109,6 +110,7 @@ pub(crate) async fn list_chats(
         .map(|chat| ChatListItem {
             id: chat.id.to_hex(),
             name: chat.name,
+            creator: chat.creator,
             members: chat.members,
         })
         .collect();

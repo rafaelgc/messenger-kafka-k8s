@@ -11,6 +11,7 @@ use crate::{AppState, ChatMember};
 #[derive(Serialize)]
 pub(crate) struct ChatResponse {
     name: String,
+    creator: ChatMember,
     members: Vec<ChatMember>,
 }
 
@@ -35,6 +36,7 @@ pub(crate) async fn get_chat(
 
     Ok(Json(ChatResponse {
         name: chat.name,
+        creator: chat.creator,
         members: chat.members,
     }))
 }
