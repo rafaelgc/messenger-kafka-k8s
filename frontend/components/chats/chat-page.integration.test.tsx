@@ -126,6 +126,32 @@ describe("ChatPage integration", () => {
     expect(screen.getByText("carol: Live update")).toBeInTheDocument();
   });
 
+  it("creates a direct chat from the sidebar", async () => {
+    const user = userEvent.setup();
+    const onCreateChat = vi.fn();
+    server.use(...createChatApiHandlers({ onCreateChat }));
+
+    renderWithProviders(<ChatPage />);
+
+    await waitForChatsToLoad();
+
+    await user.click(screen.getByRole("button", { name: "New chat" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Member nicknames"), "dana");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.click(screen.getByRole("button", { name: "Create chat" }));
+
+    await waitFor(() => {
+      expect(onCreateChat).toHaveBeenCalledWith({
+        member_nicknames: ["dana"],
+      });
+    });
+
+    expect(await screen.findByRole("button", { name: /dana/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "dana" })).toBeInTheDocument();
+  });
+
   it("updates the chat list preview for websocket messages in other chats", async () => {
     renderWithProviders(<ChatPage />);
 

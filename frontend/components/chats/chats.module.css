@@ -2,7 +2,7 @@
   height: 100vh;
   display: grid;
   grid-template-columns: 360px 1fr;
-  background: var(--bg);
+  background: var(--app-bg);
   overflow: hidden;
 }
 
@@ -10,8 +10,8 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-right: 1px solid var(--border);
-  background: var(--surface);
+  border-right: 1px solid var(--app-border);
+  background: var(--app-surface);
 }
 
 .sidebarHeader {
@@ -20,7 +20,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--app-border);
   background: #f8fafc;
 }
 
@@ -43,31 +43,53 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--app-text-muted);
 }
 
 .userName {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text);
+  color: var(--app-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.sidebarActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.newChatButton {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border: none;
+  border-radius: var(--app-radius-sm);
+  background: var(--app-primary);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.newChatButton:hover {
+  background: var(--app-primary-hover);
+}
+
 .signOut {
   flex-shrink: 0;
   padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
   background: #fff;
-  color: var(--text-muted);
+  color: var(--app-text-muted);
   font-size: 0.82rem;
   font-weight: 600;
 }
 
 .signOut:hover {
-  color: var(--text);
+  color: var(--app-text);
   border-color: #c7d0db;
 }
 
@@ -75,7 +97,146 @@
   margin: 0;
   padding: 20px 16px;
   font-size: 0.9rem;
-  color: var(--text-muted);
+  color: var(--app-text-muted);
+}
+
+.createChatForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.createChatField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.createChatLabel {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.createChatInput {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: #fff;
+  color: var(--app-text);
+  font-size: 0.9rem;
+}
+
+.createChatInput:focus {
+  outline: none;
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.nicknameInputRow {
+  display: flex;
+  gap: 8px;
+}
+
+.nicknameInputRow input {
+  flex: 1;
+  min-width: 0;
+}
+
+.addNicknameButton {
+  flex-shrink: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: #fff;
+  color: var(--app-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.addNicknameButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nicknameList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nicknameChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.nicknameRemove {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: #cbd5e1;
+  color: var(--app-text);
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.nicknameRemove:hover {
+  background: #94a3b8;
+  color: #fff;
+}
+
+.createChatError {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #b42318;
+}
+
+.createChatActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.createChatCancel,
+.createChatSubmit {
+  padding: 8px 12px;
+  border-radius: var(--app-radius-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.createChatCancel {
+  border: 1px solid var(--app-border);
+  background: #fff;
+  color: var(--app-text-muted);
+}
+
+.createChatSubmit {
+  border: none;
+  background: var(--app-primary);
+  color: #fff;
+}
+
+.createChatSubmit:hover {
+  background: var(--app-primary-hover);
+}
+
+.createChatSubmit:disabled,
+.createChatCancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .chatList {
@@ -130,7 +291,7 @@
 .chatName {
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--text);
+  color: var(--app-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -138,14 +299,14 @@
 
 .chatTime {
   font-size: 0.75rem;
-  color: var(--text-muted);
+  color: var(--app-text-muted);
   white-space: nowrap;
 }
 
 .chatPreview {
   grid-column: 2;
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--app-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -159,7 +320,7 @@
   height: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--primary);
+  background: var(--app-primary);
   color: #fff;
   font-size: 0.72rem;
   font-weight: 700;
@@ -180,7 +341,7 @@
 .chatPanelEmpty {
   align-items: center;
   justify-content: center;
-  background: var(--bg);
+  background: var(--app-bg);
   background-image: none;
 }
 
@@ -189,7 +350,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 20px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--app-border);
   background: #f8fafc;
 }
 
@@ -213,13 +374,13 @@
   margin: 0;
   font-size: 1rem;
   font-weight: 700;
-  color: var(--text);
+  color: var(--app-text);
 }
 
 .panelSubtitle {
   margin: 2px 0 0;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: var(--app-text-muted);
 }
 
 .messageList {
@@ -243,7 +404,7 @@
   align-self: center;
   padding: 12px 0;
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--app-text-muted);
   text-align: center;
 }
 
@@ -288,7 +449,7 @@
   margin: 0;
   font-size: 0.92rem;
   line-height: 1.45;
-  color: var(--text);
+  color: var(--app-text);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -310,7 +471,7 @@
   gap: 8px;
   padding: 12px 16px;
   background: #f8fafc;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--app-border);
 }
 
 .composerRow {
@@ -330,7 +491,7 @@
   min-height: 44px;
   max-height: 120px;
   padding: 11px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--app-border);
   border-radius: 24px;
   background: #fff;
   resize: none;
@@ -348,7 +509,7 @@
   height: 44px;
   border: none;
   border-radius: 50%;
-  background: var(--primary);
+  background: var(--app-primary);
   color: #fff;
   font-size: 1.1rem;
   font-weight: 700;
@@ -373,7 +534,7 @@
 
 .emptyPanelText {
   margin: 0;
-  color: var(--text-muted);
+  color: var(--app-text-muted);
   line-height: 1.6;
 }
 
@@ -386,6 +547,6 @@
   .sidebar {
     max-height: 42vh;
     border-right: none;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--app-border);
   }
 }

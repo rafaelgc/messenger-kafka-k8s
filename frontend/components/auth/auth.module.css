@@ -5,17 +5,17 @@
   justify-content: center;
   padding: 24px;
   background:
-    radial-gradient(circle at top, var(--primary-soft), transparent 42%),
-    linear-gradient(180deg, var(--bg) 0%, var(--bg-accent) 100%);
+    radial-gradient(circle at top, var(--app-primary-soft), transparent 42%),
+    linear-gradient(180deg, var(--app-bg) 0%, var(--app-bg-accent) 100%);
 }
 
 .card {
   width: 100%;
   max-width: 420px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
   border-radius: calc(var(--radius) + 4px);
-  box-shadow: var(--shadow);
+  box-shadow: var(--app-shadow);
   padding: 32px;
 }
 
@@ -28,7 +28,7 @@
 
 .subtitle {
   margin: 0 0 28px;
-  color: var(--text-muted);
+  color: var(--app-text-muted);
   font-size: 0.95rem;
   line-height: 1.5;
 }
@@ -48,16 +48,16 @@
 .label {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--text);
+  color: var(--app-text);
 }
 
 .input {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
   background: #fff;
-  color: var(--text);
+  color: var(--app-text);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -67,7 +67,7 @@
 
 .input:focus {
   outline: none;
-  border-color: var(--primary);
+  border-color: var(--app-primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
@@ -76,19 +76,19 @@
   width: 100%;
   padding: 12px 16px;
   border: none;
-  border-radius: var(--radius-sm);
-  background: var(--primary);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-primary);
   color: #fff;
   font-weight: 600;
   transition: background-color 0.15s ease;
 }
 
 .submit:hover {
-  background: var(--primary-hover);
+  background: var(--app-primary-hover);
 }
 
 .submit:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--app-primary);
   outline-offset: 2px;
 }
 
@@ -101,7 +101,7 @@
   margin-top: 24px;
   text-align: center;
   font-size: 0.9rem;
-  color: var(--text-muted);
+  color: var(--app-text-muted);
 }
 
 .footerLink {
@@ -116,5 +116,5 @@
 .error {
   margin: 0;
   font-size: 0.85rem;
-  color: var(--danger);
+  color: var(--app-danger);
 }

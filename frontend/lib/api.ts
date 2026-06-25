@@ -41,6 +41,13 @@ export type PaginatedChatsResponse = {
   pagination: PaginationMeta;
 };
 
+export type CreateChatRequest = {
+  member_nicknames: string[];
+  name?: string;
+};
+
+export type CreateChatResponse = ChatListItem;
+
 export type MessageItem = {
   id: string;
   chat_id: string;
@@ -140,6 +147,32 @@ export async function listChats(
   }
 
   return response.json() as Promise<PaginatedChatsResponse>;
+}
+
+export async function createChat(
+  token: string,
+  request: CreateChatRequest,
+): Promise<CreateChatResponse> {
+  const response = await fetch(`${API_BASE_URL}/chats`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    if (response.status === 409) {
+      throw new ApiError(
+        409,
+        "A direct chat with that person already exists.",
+      );
+    }
+    await parseError(response, "Could not create the chat.");
+  }
+
+  return response.json() as Promise<CreateChatResponse>;
 }
 
 type ListMessagesQuery = {

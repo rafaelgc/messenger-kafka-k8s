@@ -1,17 +1,47 @@
-:root {
-  --bg: #f4f6f8;
-  --bg-accent: #e8edf2;
-  --surface: #ffffff;
-  --border: #d8dee6;
-  --text: #0f172a;
-  --text-muted: #64748b;
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --primary-soft: #eff6ff;
-  --danger: #dc2626;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+
+    --app-bg: #f4f6f8;
+    --app-bg-accent: #e8edf2;
+    --app-surface: #ffffff;
+    --app-border: #d8dee6;
+    --app-text: #0f172a;
+    --app-text-muted: #64748b;
+    --app-primary: #2563eb;
+    --app-primary-hover: #1d4ed8;
+    --app-primary-soft: #eff6ff;
+    --app-danger: #dc2626;
+    --app-radius-sm: 8px;
+    --app-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
 }
 
 *,
@@ -27,8 +57,8 @@ body {
 }
 
 body {
-  background: var(--bg);
-  color: var(--text);
+  background: var(--app-bg);
+  color: var(--app-text);
   font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -43,7 +73,7 @@ button {
 }
 
 a {
-  color: var(--primary);
+  color: var(--app-primary);
   text-decoration: none;
 }
 

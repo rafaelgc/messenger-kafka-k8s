@@ -31,8 +31,8 @@ export function getChatPresentation(
   };
 }
 
-export function mapApiChatsToUiChats(apiChats: ChatListItem[]): Chat[] {
-  return apiChats.map((chat) => ({
+function mapApiChatToUiChat(chat: ChatListItem): Chat {
+  return {
     id: chat.id,
     name: chat.name,
     avatarColor: avatarColorFromNickname(chat.name),
@@ -40,7 +40,15 @@ export function mapApiChatsToUiChats(apiChats: ChatListItem[]): Chat[] {
     lastMessageAt: "",
     members: chat.members,
     messages: [],
-  }));
+  };
+}
+
+export function mapApiChatsToUiChats(apiChats: ChatListItem[]): Chat[] {
+  return apiChats.map(mapApiChatToUiChat);
+}
+
+export function mapApiChatToUiChatItem(chat: ChatListItem): Chat {
+  return mapApiChatToUiChat(chat);
 }
 
 // TODO: Lazy-load last message previews — fetch GET /chats/:id/messages?limit=1

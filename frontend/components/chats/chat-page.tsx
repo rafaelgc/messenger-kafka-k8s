@@ -10,9 +10,10 @@ import {
 } from "@/lib/chats";
 import { lastMessagePreviewFromWsEvent } from "@/lib/messages";
 import { type Chat } from "@/lib/mock-data";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChatList } from "./chat-list";
 import { ChatPanel } from "./chat-panel";
+import { CreateChatDialog, NewChatButton } from "./create-chat-dialog";
 import styles from "./chats.module.css";
 
 export function ChatPage() {
@@ -22,6 +23,12 @@ export function ChatPage() {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [chatsError, setChatsError] = useState<string | null>(null);
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
+
+  const handleChatCreated = useCallback((chat: Chat) => {
+    setChats((current) => [chat, ...current]);
+    setSelectedChatId(chat.id);
+  }, []);
 
   useEffect(() => {
     if (!token || !user) {
@@ -119,9 +126,12 @@ export function ChatPage() {
             <span className={styles.userLabel}>Signed in as</span>
             <span className={styles.userName}>{user?.nickname ?? "Alice"}</span>
           </div>
-          <button className={styles.signOut} type="button" onClick={signOut}>
-            Sign out
-          </button>
+          <div className={styles.sidebarActions}>
+            {user && token ? <NewChatButton onClick={() => setIsCreatingChat(true)} /> : null}
+            <button className={styles.signOut} type="button" onClick={signOut}>
+              Sign out
+            </button>
+          </div>
         </div>
 
         {isLoadingChats ? (
@@ -141,6 +151,16 @@ export function ChatPage() {
       </aside>
 
       <ChatPanel chat={selectedChat} />
+
+      {user && token ? (
+        <CreateChatDialog
+          open={isCreatingChat}
+          onOpenChange={setIsCreatingChat}
+          token={token}
+          currentUserNickname={user.nickname}
+          onChatCreated={handleChatCreated}
+        />
+      ) : null}
     </div>
   );
 }
