@@ -7,9 +7,9 @@ use crate::{AppState, ChatMember, StoredChat};
 
 #[derive(Deserialize)]
 pub(crate) struct CreateChatRequest {
-    creator_id: String,
+    creator: ChatMember,
     name: String,
-    member_ids: Vec<String>,
+    members: Vec<ChatMember>,
 }
 
 #[derive(Serialize)]
@@ -24,34 +24,28 @@ pub(crate) async fn create_chat(
     State(state): State<AppState>,
     Json(request): Json<CreateChatRequest>,
 ) -> Result<(StatusCode, Json<CreateChatResponse>), StatusCode> {
-    if request.creator_id.trim().is_empty() {
+    if request.creator.id.trim().is_empty() || request.creator.nickname.trim().is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    if request.member_ids.is_empty() {
+    if request.members.is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
 
     let mut seen_member_ids = HashSet::new();
-    for member_id in std::iter::once(&request.creator_id).chain(request.member_ids.iter()) {
-        if member_id.trim().is_empty() || !seen_member_ids.insert(member_id) {
+    for member in std::iter::once(&request.creator).chain(request.members.iter()) {
+        if member.id.trim().is_empty() || member.nickname.trim().is_empty() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
+        if !seen_member_ids.insert(&member.id) {
             return Err(StatusCode::BAD_REQUEST);
         }
     }
 
-    let creator = ChatMember {
-        id: request.creator_id.clone(),
-        nickname: resolve_member_nickname(&request.creator_id),
-    };
+    let creator = request.creator.clone();
 
-    let mut members: Vec<ChatMember> = request
-        .member_ids
-        .iter()
-        .map(|member_id| ChatMember {
-            id: member_id.clone(),
-            nickname: resolve_member_nickname(member_id),
-        })
-        .collect();
+    let mut members = request.members;
     members.push(creator.clone());
     members.sort_by(|left, right| left.id.cmp(&right.id));
 
@@ -98,11 +92,6 @@ pub(crate) async fn create_chat(
             members: chat.members,
         }),
     ))
-}
-
-// TODO: Resolve member nicknames from the user service instead of using placeholders.
-fn resolve_member_nickname(user_id: &str) -> String {
-    format!("user-{user_id}")
 }
 
 fn direct_message_name(members: &[ChatMember]) -> String {

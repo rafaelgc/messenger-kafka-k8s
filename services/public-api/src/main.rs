@@ -98,9 +98,9 @@ struct CreateChatRequest {
 
 #[derive(Serialize)]
 struct CreateChatForwardRequest {
-    creator_id: String,
+    creator: ChatMember,
     name: String,
-    member_ids: Vec<String>,
+    members: Vec<ChatMember>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -114,7 +114,6 @@ struct CreateChatResponse {
 #[derive(Deserialize)]
 struct GetUserResponse {
     id: String,
-    #[allow(dead_code)]
     nickname: String,
 }
 
@@ -390,9 +389,13 @@ async fn create_chat(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let mut member_ids = Vec::with_capacity(body.member_nicknames.len());
+    let mut members = Vec::with_capacity(body.member_nicknames.len());
     for nickname in &body.member_nicknames {
-        member_ids.push(lookup_user_id_by_nickname(&state, nickname).await?);
+        let user = lookup_user_by_nickname(&state, nickname).await?;
+        members.push(ChatMember {
+            id: user.id,
+            nickname: user.nickname,
+        });
     }
 
     let url = format!(
@@ -404,9 +407,12 @@ async fn create_chat(
         .http_client
         .post(&url)
         .json(&CreateChatForwardRequest {
-            creator_id: claims.sub,
+            creator: ChatMember {
+                id: claims.sub,
+                nickname: claims.nickname,
+            },
             name: body.name,
-            member_ids,
+            members,
         })
         .send()
         .await
@@ -609,10 +615,10 @@ async fn fetch_chat_members(state: &AppState, chat_id: &str) -> Result<Vec<ChatM
         .map(|chat| chat.members)
 }
 
-async fn lookup_user_id_by_nickname(
+async fn lookup_user_by_nickname(
     state: &AppState,
     nickname: &str,
-) -> Result<String, StatusCode> {
+) -> Result<GetUserResponse, StatusCode> {
     let url = format!(
         "{}/users",
         state.users_service_url.trim_end_matches('/')
@@ -652,5 +658,4 @@ async fn lookup_user_id_by_nickname(
             eprintln!("failed to decode users service lookup for nickname={nickname}: {error}");
             StatusCode::BAD_GATEWAY
         })
-        .map(|user| user.id)
 }
