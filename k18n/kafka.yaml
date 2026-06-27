@@ -1,13 +1,25 @@
 # Kafka
 apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kafka-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
 kind: Service
 metadata:
-  name: kafka-service
+  name: kafka
 spec:
   selector:
-    app.kubernetes.io/name: kafka-service
+    app.kubernetes.io/name: kafka
   ports:
-    - protocol: TCP
+    - name: plaintext
+      protocol: TCP
       port: 9092
       targetPort: 9092
 ---
@@ -19,31 +31,49 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: kafka-service
+      app.kubernetes.io/name: kafka
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: kafka-service
+        app.kubernetes.io/name: kafka
     spec:
       containers:
         - name: kafka-container
           image: soldevelo/kafka:3.9
           ports:
             - containerPort: 9092
+            - containerPort: 9093
           env:
             - name: KAFKA_CFG_NODE_ID
               value: "0"
             - name: KAFKA_CFG_PROCESS_ROLES
               value: controller,broker
             - name: KAFKA_CFG_CONTROLLER_QUORUM_VOTERS
-              value: 0@kafka-service:9093
+              value: "0@localhost:9093"
             - name: KAFKA_CFG_LISTENERS
               value: PLAINTEXT://:9092,CONTROLLER://:9093
             - name: KAFKA_CFG_ADVERTISED_LISTENERS
-              value: PLAINTEXT://kafka-service:9092
+              value: PLAINTEXT://kafka:9092
             - name: KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP
               value: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
             - name: KAFKA_CFG_CONTROLLER_LISTENER_NAMES
               value: CONTROLLER
             - name: KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE
               value: "false"
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/kafka
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: kafka-data
