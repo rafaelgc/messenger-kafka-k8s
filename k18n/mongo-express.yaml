@@ -1,0 +1,133 @@
+---
+# Dev tooling — mongo-express (one UI for all MongoDB instances)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongo-express-config
+data:
+  # Mounted as config.default.js (not config.js) so the app loads this directly
+  # without deepmerge — merging an array into the default mongodb object crashes.
+  config.default.js: |
+    export default {
+      mongodb: [
+        {
+          connectionString: 'mongodb://storage-mongodb:27017',
+          connectionName: 'storage',
+          admin: true,
+          connectionOptions: { maxPoolSize: 4 },
+          whitelist: [],
+          blacklist: [],
+        },
+        {
+          connectionString: 'mongodb://chat-mongodb:27017',
+          connectionName: 'chat',
+          admin: true,
+          connectionOptions: { maxPoolSize: 4 },
+          whitelist: [],
+          blacklist: [],
+        },
+        {
+          connectionString: 'mongodb://users-mongodb:27017',
+          connectionName: 'users',
+          admin: true,
+          connectionOptions: { maxPoolSize: 4 },
+          whitelist: [],
+          blacklist: [],
+        },
+      ],
+      site: {
+        baseUrl: '/',
+        cookieKeyName: 'mongo-express',
+        cookieSecret: 'dev-mongo-express-cookie',
+        host: '0.0.0.0',
+        port: 8081,
+        requestSizeLimit: '50mb',
+        sessionSecret: 'dev-mongo-express-session',
+        sslCert: '',
+        sslEnabled: false,
+        sslKey: '',
+      },
+      healthCheck: { path: '/status' },
+      useBasicAuth: false,
+      basicAuth: { username: 'admin', password: 'pass' },
+      options: {
+        console: true,
+        documentsPerPage: 10,
+        editorTheme: 'rubyblue',
+        maxPropSize: 100000,
+        maxRowSize: 1000000,
+        cmdType: 'eval',
+        subprocessTimeout: 300,
+        readOnly: false,
+        persistEditMode: false,
+        collapsibleJSON: true,
+        collapsibleJSONDefaultUnfold: 1,
+        gridFSEnabled: false,
+        logger: {},
+        confirmDelete: false,
+        noExport: false,
+        fullwidthLayout: false,
+        noDelete: false,
+      },
+    };
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-express
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: mongo-express
+  ports:
+    - protocol: TCP
+      port: 8083
+      targetPort: 8081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo-express-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mongo-express
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mongo-express
+    spec:
+      containers:
+        - name: mongo-express
+          image: mongo-express:1.0.2-20
+          ports:
+            - containerPort: 8081
+          env:
+            - name: ME_CONFIG_BASICAUTH
+              value: "false"
+            # Entrypoint waits for this host before starting (default is mongo:27017).
+            - name: ME_CONFIG_MONGODB_URL
+              value: mongodb://storage-mongodb:27017
+            - name: VCAP_APP_HOST
+              value: "0.0.0.0"
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.default.js
+              subPath: config.default.js
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: config
+          configMap:
+            name: mongo-express-config
