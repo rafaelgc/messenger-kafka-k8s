@@ -78,14 +78,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: message-storage-service
+  name: message-storage
 spec:
   selector:
-    app.kubernetes.io/name: message-storage-service
+    app.kubernetes.io/name: message-storage
   ports:
     - protocol: TCP
-      port: 9000
-      targetPort: 9376
+      port: 8087
+      targetPort: 8087
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -95,17 +95,17 @@ spec:
   replicas: 2
   selector:
     matchLabels:
-      app.kubernetes.io/name: message-storage-service
+      app.kubernetes.io/name: message-storage
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: message-storage-service
+        app.kubernetes.io/name: message-storage
     spec:
       containers:
         - name: message-storage-container
           image: message-storage:latest
           ports:
-            - containerPort: 9376
+            - containerPort: 8087
           env:
             - name: RUST_LOG
               value: info

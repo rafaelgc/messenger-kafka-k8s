@@ -29,6 +29,8 @@ metadata:
   name: kafka-deployment
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: kafka
@@ -64,15 +66,19 @@ spec:
             - name: data
               mountPath: /bitnami/kafka
           readinessProbe:
-            exec:
-              command:
-                - /bin/bash
-                - -c
-                - kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1
+            tcpSocket:
+              port: 9092
             initialDelaySeconds: 30
             periodSeconds: 10
-            timeoutSeconds: 10
-            failureThreshold: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
       volumes:
         - name: data
           persistentVolumeClaim:
