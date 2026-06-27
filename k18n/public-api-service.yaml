@@ -4,6 +4,7 @@ kind: Service
 metadata:
   name: public-api-service
 spec:
+  type: LoadBalancer
   selector:
     app.kubernetes.io/name: public-api-service
   ports:
