@@ -18,7 +18,7 @@ kind: Deployment
 metadata:
   name: message-delivery-deployment
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: message-delivery
@@ -43,3 +43,7 @@ spec:
               value: 0.0.0.0:8081
             - name: JWT_SECRET
               value: dev-jwt-secret-change-in-production
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name

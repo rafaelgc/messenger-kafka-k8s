@@ -40,6 +40,7 @@ static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 struct AppState {
     connections: Arc<DashMap<String, Vec<(ConnectionId, ConnectionTx)>>>,
     jwt_secret: String,
+    pod_name: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -68,10 +69,12 @@ struct TokenClaims {
 async fn main() {
     let jwt_secret = std::env::var("JWT_SECRET")
         .unwrap_or_else(|_| "dev-jwt-secret-change-in-production".into());
+    let pod_name = std::env::var("POD_NAME").unwrap_or_else(|_| "unknown".into());
 
     let state = AppState {
         connections: Arc::new(DashMap::new()),
         jwt_secret,
+        pod_name,
     };
 
     tokio::select! {
@@ -214,7 +217,8 @@ fn handle_client_message(
             *user_id = Some(authenticated_user_id.clone());
             *connection_id = Some(conn_id);
             println!(
-                "client authenticated as user_id={authenticated_user_id}, connection_id={conn_id}"
+                "pod={} client authenticated as user_id={authenticated_user_id}, connection_id={conn_id}",
+                state.pod_name
             );
         }
     }
@@ -286,7 +290,8 @@ fn handle_kafka_message(message: &impl Message, state: &AppState) -> Result<(), 
         .map_err(|error| format!("invalid message.sent payload: {error}"))?;
 
     println!(
-        "received message.sent: chat_id={}, sender_id={}, text={}, recipients={}",
+        "pod={} received message.sent: chat_id={}, sender_id={}, text={}, recipients={}",
+        state.pod_name,
         event.chat_id,
         event.sender_id,
         event.text,
@@ -299,7 +304,8 @@ fn handle_kafka_message(message: &impl Message, state: &AppState) -> Result<(), 
     let delivered_to = deliver_to_recipients(state, &event.recipient_ids, &outbound);
 
     println!(
-        "delivered message.sent to {delivered_to} connected recipient(s) (chat_id={}, {} recipient(s) in event)",
+        "pod={} delivered message.sent to {delivered_to} connected recipient(s) (chat_id={}, {} recipient(s) in event)",
+        state.pod_name,
         event.chat_id,
         event.recipient_ids.len()
     );
