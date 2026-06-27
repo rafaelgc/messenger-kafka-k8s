@@ -54,7 +54,7 @@ export function ChatPanel({ chat }: ChatPanelProps) {
   useEffect(() => {
     const chatId = chat?.id;
 
-    if (!chatId || !token || !user) {
+    if (!chatId || !token || !user || !chat) {
       setMessages([]);
       setHasMore(false);
       setNextCursor(null);
@@ -63,6 +63,11 @@ export function ChatPanel({ chat }: ChatPanelProps) {
       setIsLoadingMore(false);
       return;
     }
+
+    const authToken = token;
+    const currentUser = user;
+    const currentChat = chat;
+    const currentChatId = chat.id;
 
     let cancelled = false;
 
@@ -75,7 +80,7 @@ export function ChatPanel({ chat }: ChatPanelProps) {
       setNextCursor(null);
 
       try {
-        const response = await listMessages(token, chatId, {
+        const response = await listMessages(authToken, currentChatId, {
           limit: MESSAGES_PAGE_SIZE,
         });
 
@@ -86,9 +91,9 @@ export function ChatPanel({ chat }: ChatPanelProps) {
         const uiMessages = response.messages.map((message) =>
           mapApiMessageToUiMessage(
             message,
-            chat.members,
-            user.id,
-            user.nickname,
+            currentChat.members,
+            currentUser.id,
+            currentUser.nickname,
           ),
         );
 
