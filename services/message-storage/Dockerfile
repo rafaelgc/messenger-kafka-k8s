@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 FROM rust:1-bookworm AS builder
 
 WORKDIR /app
@@ -9,7 +11,11 @@ RUN apt-get update \
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 
-RUN cargo build --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cargo build --release \
+    && cp /app/target/release/message-storage /app/message-storage
 
 FROM debian:bookworm-slim
 
@@ -17,6 +23,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/message-storage /usr/local/bin/message-storage
+COPY --from=builder /app/message-storage /usr/local/bin/message-storage
+
+EXPOSE 8087
 
 CMD ["message-storage"]

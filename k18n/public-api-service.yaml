@@ -1,0 +1,53 @@
+# Message Storage
+apiVersion: v1
+kind: Service
+metadata:
+  name: public-api-service
+spec:
+  selector:
+    app.kubernetes.io/name: public-api-service
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: public-api-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: public-api-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: public-api-service
+    spec:
+      containers:
+        - name: public-api-container
+          image: public-api:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: RUST_LOG
+              value: info
+            - name: KAFKA_BROKERS
+              value: kafka:9092
+            - name: PUBLIC_API_BIND_ADDR
+              value: 0.0.0.0:8080
+            - name: CHAT_SERVICE_URL
+              value: http://chat:8085
+            - name: STORAGE_SERVICE_URL
+              value: http://message-storage:8087
+            - name: USERS_SERVICE_URL
+              value: http://users:8088
+            - name: JWT_SECRET
+              value: dev-jwt-secret-change-in-production
+            - name: CORS_ALLOWED_ORIGIN
+              value: http://localhost:3000
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name

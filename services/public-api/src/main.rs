@@ -238,8 +238,9 @@ fn create_producer() -> FutureProducer {
         .expect("failed to create Kafka producer")
 }
 
-async fn home() -> &'static str {
-    "Hello, World!"
+async fn home() -> String {
+    let pod_name = std::env::var("POD_NAME").unwrap_or_else(|_| "unknown".into());
+    format!("Hello, World! {}", pod_name)
 }
 
 async fn create_user(
