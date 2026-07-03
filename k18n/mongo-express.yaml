@@ -11,7 +11,7 @@ data:
     export default {
       mongodb: [
         {
-          connectionString: 'mongodb://storage-mongodb:27017',
+          connectionString: 'mongodb://admin:admin123@mongodb-mongos.mongodb-operator.svc.cluster.local:27017/messaging?authSource=admin',
           connectionName: 'storage',
           admin: true,
           connectionOptions: { maxPoolSize: 4 },
@@ -90,6 +90,9 @@ metadata:
   name: mongo-express-deployment
 spec:
   replicas: 1
+  # Recreate avoids two pods during rollout; subPath ConfigMap mounts do not hot-reload.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: mongo-express
@@ -97,6 +100,8 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: mongo-express
+      annotations:
+        config/revision: mongos-v1
     spec:
       containers:
         - name: mongo-express
@@ -108,7 +113,10 @@ spec:
               value: "false"
             # Entrypoint waits for this host before starting (default is mongo:27017).
             - name: ME_CONFIG_MONGODB_URL
-              value: mongodb://storage-mongodb:27017
+              # [TODO][SECURITY] Review this hardcoded password.
+              value: mongodb://admin:admin123@mongodb-mongos.mongodb-operator.svc.cluster.local:27017/admin?authSource=admin
+            - name: ME_CONFIG_CONNECT_RETRIES
+              value: "120"
             - name: VCAP_APP_HOST
               value: "0.0.0.0"
           volumeMounts:
