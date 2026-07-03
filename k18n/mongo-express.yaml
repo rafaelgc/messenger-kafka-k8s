@@ -11,7 +11,7 @@ data:
     export default {
       mongodb: [
         {
-          connectionString: 'mongodb://admin:admin123@mongodb-mongos.mongodb.svc.cluster.local:27017/messaging?authSource=admin',
+          connectionString: 'mongodb://admin:admin123@mongodb-mongos.mongodb-operator.svc.cluster.local:27017/messaging?authSource=admin',
           connectionName: 'storage',
           admin: true,
           connectionOptions: { maxPoolSize: 4 },
@@ -114,7 +114,7 @@ spec:
             # Entrypoint waits for this host before starting (default is mongo:27017).
             - name: ME_CONFIG_MONGODB_URL
               # [TODO][SECURITY] Review this hardcoded password.
-              value: mongodb://admin:admin123@mongodb-mongos.mongodb.svc.cluster.local:27017/admin?authSource=admin
+              value: mongodb://admin:admin123@mongodb-mongos.mongodb-operator.svc.cluster.local:27017/admin?authSource=admin
             - name: ME_CONFIG_CONNECT_RETRIES
               value: "120"
             - name: VCAP_APP_HOST

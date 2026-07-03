@@ -6,8 +6,8 @@ metadata:
   name: message-storage-mongodb
 type: Opaque
 stringData:
-  # Credentials must match admin-user in the mongodb namespace.
-  uri: mongodb://admin:admin123@mongodb-mongos.mongodb.svc.cluster.local:27017/messaging?authSource=admin
+  # Credentials must match admin-user in the mongodb-operator namespace.
+  uri: mongodb://admin:admin123@mongodb-mongos.mongodb-operator.svc.cluster.local:27017/messaging?authSource=admin
 ---
 apiVersion: v1
 kind: Service
