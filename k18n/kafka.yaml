@@ -23,12 +23,14 @@ spec:
       port: 9092
       targetPort: 9092
 ---
+# [TODO] I need to investigate if a Deployment is the right choice for Kafka.
+# A StatefulSet might be more appropriate.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kafka-deployment
 spec:
-  replicas: 1
+  replicas: 1 # [TODO] We should add more replicas.
   strategy:
     type: Recreate
   selector:

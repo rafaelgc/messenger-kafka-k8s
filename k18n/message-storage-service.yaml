@@ -1,80 +1,14 @@
----
-# Storage MongoDB
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: storage-mongodb-data
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
+# Message storage connects to the sharded cluster via mongos (see message-storage-service-mongo.yaml).
 ---
 apiVersion: v1
-kind: Service
+kind: Secret
 metadata:
-  name: storage-mongodb
-spec:
-  selector:
-    app.kubernetes.io/name: storage-mongodb
-  ports:
-    - protocol: TCP
-      port: 27017
-      targetPort: 27017
+  name: message-storage-mongodb
+type: Opaque
+stringData:
+  # Credentials must match admin-user in the mongodb namespace.
+  uri: mongodb://admin:admin123@mongodb-mongos.mongodb.svc.cluster.local:27017/messaging?authSource=admin
 ---
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: storage-mongodb
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: storage-mongodb
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: storage-mongodb
-    spec:
-      containers:
-        - name: mongodb
-          image: mongo:7
-          ports:
-            - containerPort: 27017
-          env:
-            - name: MONGO_INITDB_DATABASE
-              value: messaging
-          volumeMounts:
-            - name: data
-              mountPath: /data/db
-          readinessProbe:
-            exec:
-              command:
-                - mongosh
-                - --quiet
-                - --eval
-                - "db.adminCommand('ping').ok"
-            initialDelaySeconds: 20
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 10
-          livenessProbe:
-            exec:
-              command:
-                - mongosh
-                - --quiet
-                - --eval
-                - "db.adminCommand('ping').ok"
-            initialDelaySeconds: 30
-            periodSeconds: 30
-            timeoutSeconds: 5
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: storage-mongodb-data
----
-# Message Storage
 apiVersion: v1
 kind: Service
 metadata:
@@ -114,7 +48,10 @@ spec:
             - name: KAFKA_CONSUMER_GROUP
               value: message-storage
             - name: MONGODB_URI
-              value: mongodb://storage-mongodb:27017
+              valueFrom:
+                secretKeyRef:
+                  name: message-storage-mongodb
+                  key: uri
             - name: MONGODB_DATABASE
               value: messaging
             - name: STORAGE_BIND_ADDR

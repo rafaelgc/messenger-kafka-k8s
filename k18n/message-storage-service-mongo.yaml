@@ -1,0 +1,414 @@
+# DO NOT REMOVE THE COMMENTED PARTS, I COULD NEED THEM LATER.
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: admin-user
+  namespace: mongodb
+type: Opaque
+stringData:
+  password: admin123 # [SECURITY][TODO] Review this.
+---
+# Keyfile secrets (internal cluster authentication)
+#
+# What: A keyfile is a shared secret that lets MongoDB processes trust each other.
+#       Config servers, shards, and mongos must all use the SAME keyfile content so
+#       they can communicate inside the sharded cluster (separate from SCRAM client
+#       login — that is admin-user above).
+#
+# Why three secrets with identical content: The Community operator looks up a secret
+# named "{MongoDBCommunity.metadata.name}-keyfile" automatically — it is NOT
+# referenced in the CR spec below. We cannot use one secret for all CRs because each
+# CR name maps to a different secret name. mongos mounts mongodb-config-keyfile
+# explicitly (see Deployment mongodb-mongos).
+#
+# If these secrets are missing at first deploy, the operator generates a random
+# keyfile per CR, which breaks sharding. Create them before the MongoDBCommunity CRs.
+#
+# Key format (MongoDB requirement): 6–1024 chars, base64 alphabet [A-Za-z0-9+/].
+# The value below is dev-only file CONTENT (not a filename). Generate for prod with:
+#   openssl rand -base64 756
+#
+# Secret key "keyfile" is the filename when mounted (e.g. /etc/mongodb-keyfile/keyfile).
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-0-keyfile # operator auto-mounts for CR metadata.name mongodb-0
+  namespace: mongodb
+type: Opaque
+stringData:
+  keyfile: messaging-dev-shared-keyfile-9Kx2mP4vL8nQ6wR3yT1zA5bC7dE0fG4hJ6kM2nP8q # [SECURITY][TODO] Review this.
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-1-keyfile # operator auto-mounts for CR metadata.name mongodb-1
+  namespace: mongodb
+type: Opaque
+stringData:
+  keyfile: messaging-dev-shared-keyfile-9Kx2mP4vL8nQ6wR3yT1zA5bC7dE0fG4hJ6kM2nP8q
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-config-keyfile # operator auto-mounts for CR mongodb-config; also used by mongos
+  namespace: mongodb
+type: Opaque
+stringData:
+  keyfile: messaging-dev-shared-keyfile-9Kx2mP4vL8nQ6wR3yT1zA5bC7dE0fG4hJ6kM2nP8q
+---
+apiVersion: mongodbcommunity.mongodb.com/v1
+kind: MongoDBCommunity
+metadata:
+  name: mongodb-0
+  namespace: mongodb
+spec:
+  members: 2 # local dev: 3rd pod (mongodb-0-2) failed to schedule (Insufficient cpu)
+  type: ReplicaSet
+  version: "7.0.0"
+  additionalMongodConfig:
+    sharding.clusterRole: shardsvr
+  users:
+    - name: admin
+      db: admin
+      passwordSecretRef:
+        name: admin-user
+      roles:
+        - name: root
+          db: admin
+      scramCredentialsSecretName: my-scram-0
+  # replicaSetHorizons:
+  #   - horizon: db-node-1.example.com:30017
+  #   - horizon: db-node-2.example.com:30018
+  #   - horizon: db-node-3.example.com:30019
+  security:
+    authentication:
+      modes:
+        - SCRAM
+  #additionalMongodConfig:
+  #  storage.wiredTiger.engineConfig.journalCompressor: zlib
+  # statefulSet:
+  #   spec:
+  #     template:
+  #       spec:
+  #         containers:
+  #           - name: mongod
+  #             resources:
+  #               limits:
+  #                 cpu: "1"
+  #                 memory: 2Gi
+  #               requests:
+  #                 cpu: 500m
+  #                 memory: 1Gi
+  #         affinity: # WHAT IS THIS?
+  #           podAntiAffinity:
+  #             requiredDuringSchedulingIgnoredDuringExecution:
+  #               - labelSelector:
+  #                   matchExpressions:
+  #                     - key: app
+  #                       operator: In
+  #                       values:
+  #                         - mongodb
+  #                 topologyKey: "kubernetes.io/hostname"
+  #     volumeClaimTemplates:
+  #       - metadata:
+  #           name: data-volume
+  #         spec:
+  #           accessModes:
+  #             - ReadWriteOnce
+  #           resources:
+  #             requests:
+  #               storage: 5G
+---
+apiVersion: mongodbcommunity.mongodb.com/v1
+kind: MongoDBCommunity
+metadata:
+  name: mongodb-1
+  namespace: mongodb
+spec:
+  members: 3
+  type: ReplicaSet
+  version: "7.0.0"
+  additionalMongodConfig:
+    sharding.clusterRole: shardsvr
+  users:
+    - name: admin
+      db: admin
+      passwordSecretRef:
+        name: admin-user
+      roles:
+        - name: root
+          db: admin
+      scramCredentialsSecretName: my-scram-1
+  # replicaSetHorizons:
+  #   - horizon: db-node-1.example.com:30017
+  #   - horizon: db-node-2.example.com:30018
+  #   - horizon: db-node-3.example.com:30019
+  security:
+    authentication:
+      modes:
+        - SCRAM
+---
+# Config servers (metadata store for the sharded cluster).
+# Operator creates pods mongodb-config-0/1/2 and service mongodb-config-svc.
+apiVersion: mongodbcommunity.mongodb.com/v1
+kind: MongoDBCommunity
+metadata:
+  name: mongodb-config
+  namespace: mongodb
+spec:
+  members: 3
+  type: ReplicaSet
+  version: "7.0.0"
+  additionalMongodConfig:
+    sharding.clusterRole: configsvr
+  users:
+    - name: admin
+      db: admin
+      passwordSecretRef:
+        name: admin-user
+      roles:
+        - name: root
+          db: admin
+      scramCredentialsSecretName: my-scram-config
+  security:
+    authentication:
+      modes:
+        - SCRAM
+---
+# mongos routers — clients should connect here (not to individual shards).
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-mongos
+  namespace: mongodb
+spec:
+  selector:
+    app.kubernetes.io/name: mongodb-mongos
+  ports:
+    - protocol: TCP
+      port: 27017
+      targetPort: 27017
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-mongos
+  namespace: mongodb
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mongodb-mongos
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mongodb-mongos
+    spec:
+      initContainers:
+        - name: wait-for-config
+          image: mongo:7.0.0
+          command:
+            - bash
+            - -ec
+            - |
+              for host in \
+                mongodb-config-0.mongodb-config-svc.mongodb.svc.cluster.local:27017 \
+                mongodb-config-1.mongodb-config-svc.mongodb.svc.cluster.local:27017 \
+                mongodb-config-2.mongodb-config-svc.mongodb.svc.cluster.local:27017; do
+                until mongosh --host "$host" --quiet --eval 'db.adminCommand("ping").ok'; do
+                  echo "waiting for $host"
+                  sleep 5
+                done
+              done
+      containers:
+        - name: mongos
+          image: mongo:7.0.0
+          command:
+            - mongos
+          args:
+            - --bind_ip_all
+            - --port=27017
+            - --keyFile
+            - /etc/mongodb-keyfile/keyfile
+            - --configdb
+            - mongodb-config/mongodb-config-0.mongodb-config-svc.mongodb.svc.cluster.local:27017,mongodb-config-1.mongodb-config-svc.mongodb.svc.cluster.local:27017,mongodb-config-2.mongodb-config-svc.mongodb.svc.cluster.local:27017
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: mongodb-keyfile
+              mountPath: /etc/mongodb-keyfile
+              readOnly: true
+          readinessProbe:
+            exec:
+              command:
+                - mongosh
+                - --quiet
+                - --eval
+                - "db.adminCommand('ping').ok"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - mongosh
+                - --quiet
+                - --eval
+                - "db.adminCommand('ping').ok"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+      volumes:
+        - name: mongodb-keyfile
+          secret:
+            secretName: mongodb-config-keyfile
+            defaultMode: 0400
+---
+# Readiness gate only: waits until admin login works on config servers and mongos,
+# then exits successfully. It does NOT create users or change cluster state — use
+# mongodb-shard-bootstrap for that. Useful to confirm auth before wiring apps.
+# If this job loops forever, run the recovery commands below.
+# Recovery:
+#   kubectl delete secret -n mongodb my-scram-0-scram-credentials my-scram-1-scram-credentials my-scram-config-scram-credentials
+#   kubectl delete pod -n mongodb -l app=mongodb-0-svc
+#   kubectl delete pod -n mongodb -l app=mongodb-1-svc
+#   kubectl delete pod -n mongodb -l app=mongodb-config-svc
+#   kubectl rollout restart deployment/mongodb-mongos -n mongodb
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongodb-auth-bootstrap
+  namespace: mongodb
+spec:
+  backoffLimit: 30
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: bootstrap-auth
+          image: mongo:7.0.0
+          env:
+            - name: MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: admin-user
+                  key: password
+          command:
+            - bash
+            - -ec
+            - |
+              set -e
+              config_uri="mongodb://admin:${MONGODB_PASSWORD}@mongodb-config-0.mongodb-config-svc.mongodb.svc.cluster.local:27017/admin?authSource=admin"
+              mongos_uri="mongodb://admin:${MONGODB_PASSWORD}@mongodb-mongos.mongodb.svc.cluster.local:27017/admin?authSource=admin"
+
+              until mongosh "$config_uri" --quiet --eval '1' 2>/dev/null; do
+                echo "waiting for config server admin auth"
+                sleep 10
+              done
+              echo "config server admin auth works"
+
+              until mongosh --host mongodb-mongos.mongodb.svc.cluster.local --quiet --eval 'db.adminCommand("ping").ok' 2>/dev/null; do
+                echo "waiting for mongos"
+                sleep 5
+              done
+
+              until mongosh "$mongos_uri" --quiet --eval '1' 2>/dev/null; do
+                echo "waiting for mongos admin auth"
+                sleep 10
+              done
+              echo "mongos admin auth works"
+---
+# One-shot cluster bootstrap: register shards and enable sharding on messaging.messages.
+# Re-apply after script changes: kubectl delete job mongodb-shard-bootstrap -n mongodb
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongodb-shard-bootstrap
+  namespace: mongodb
+data:
+  bootstrap.js: |
+    const shards = [
+      "mongodb-0/mongodb-0-0.mongodb-0-svc.mongodb.svc.cluster.local:27017,mongodb-0-1.mongodb-0-svc.mongodb.svc.cluster.local:27017",
+      "mongodb-1/mongodb-1-0.mongodb-1-svc.mongodb.svc.cluster.local:27017,mongodb-1-1.mongodb-1-svc.mongodb.svc.cluster.local:27017,mongodb-1-2.mongodb-1-svc.mongodb.svc.cluster.local:27017",
+    ];
+
+    const dbName = "messaging";
+    const collName = "messages";
+    const ns = `${dbName}.${collName}`;
+    const config = db.getSiblingDB("config");
+
+    function shardReplicaSetName(conn) {
+      return conn.split("/")[0];
+    }
+
+    shards.forEach((conn) => {
+      const rsName = shardReplicaSetName(conn);
+      if (config.shards.findOne({ _id: rsName })) {
+        print(`Shard already registered: ${rsName}`);
+        return;
+      }
+      print(`Adding shard: ${conn}`);
+      sh.addShard(conn);
+    });
+
+    const dbEntry = config.databases.findOne({ _id: dbName });
+    if (!dbEntry || !dbEntry.partitioned) {
+      print(`Enabling sharding on database: ${dbName}`);
+      sh.enableSharding(dbName);
+    } else {
+      print(`Database already sharding-enabled: ${dbName}`);
+    }
+
+    if (!config.collections.findOne({ _id: ns })) {
+      print(`Sharding collection: ${ns} on { chat_id: "hashed" }`);
+      sh.shardCollection(ns, { chat_id: "hashed" });
+    } else {
+      print(`Collection already sharded: ${ns}`);
+    }
+
+    print("Bootstrap complete.");
+    printjson(sh.status());
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongodb-shard-bootstrap
+  namespace: mongodb
+spec:
+  backoffLimit: 20
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: bootstrap
+          image: mongo:7.0.0
+          env:
+            - name: MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: admin-user
+                  key: password
+          command:
+            - bash
+            - -ec
+            - |
+              mongos_host="mongodb-mongos.mongodb.svc.cluster.local"
+              until mongosh --host "$mongos_host" --username admin --password "$MONGODB_PASSWORD" --authenticationDatabase admin --quiet --eval 'db.adminCommand("ping").ok'; do
+                echo "waiting for mongos"
+                sleep 5
+              done
+
+              mongosh "mongodb://admin:${MONGODB_PASSWORD}@${mongos_host}:27017/admin?authSource=admin" /scripts/bootstrap.js
+          volumeMounts:
+            - name: bootstrap-script
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: bootstrap-script
+          configMap:
+            name: mongodb-shard-bootstrap
+            defaultMode: 0444
