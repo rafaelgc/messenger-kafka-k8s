@@ -5,13 +5,14 @@
 #   kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/cloud/deploy.yaml
 #   kubectl wait --namespace ingress-nginx --for=condition=ready pod -l app.kubernetes.io/component=controller --timeout=120s
 #
-# DNS: app.localhost, api.localhost, and ws.localhost → 127.0.0.1
-# (browsers often resolve *.localhost automatically; /etc/hosts works too).
+# DNS: app/api/ws/kafka/mongo.localhost → 127.0.0.1 (/etc/hosts if needed).
 #
 # Routes:
 #   http://app.localhost        → frontend
 #   http://api.localhost/*      → public-api-service
 #   ws://ws.localhost/ws        → message-delivery
+#   http://kafka.localhost      → kafka-ui (dev tooling)
+#   http://mongo.localhost      → mongo-express (dev tooling)
 #
 # Rebuild frontend after URL changes (NEXT_PUBLIC_* are baked at build time):
 #   NEXT_PUBLIC_API_URL=http://api.localhost
@@ -61,3 +62,23 @@ spec:
                 name: message-delivery
                 port:
                   number: 8081
+    - host: kafka.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kafka-ui
+                port:
+                  number: 8082
+    - host: mongo.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mongo-express
+                port:
+                  number: 8083

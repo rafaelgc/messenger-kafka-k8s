@@ -76,7 +76,6 @@ kind: Service
 metadata:
   name: mongo-express
 spec:
-  type: LoadBalancer
   selector:
     app.kubernetes.io/name: mongo-express
   ports:

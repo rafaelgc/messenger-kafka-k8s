@@ -5,7 +5,6 @@ kind: Service
 metadata:
   name: kafka-ui
 spec:
-  type: LoadBalancer
   selector:
     app.kubernetes.io/name: kafka-ui
   ports:
