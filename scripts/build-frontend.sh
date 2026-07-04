@@ -6,8 +6,8 @@ SERVICE_DIR="${ROOT}/frontend"
 IMAGE="${IMAGE:-frontend:latest}"
 LOAD_KIND=false
 NO_CACHE=""
-NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-http://localhost:8080}"
-NEXT_PUBLIC_WS_URL="${NEXT_PUBLIC_WS_URL:-ws://localhost:8081/ws}"
+NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-http://api.localhost}"
+NEXT_PUBLIC_WS_URL="${NEXT_PUBLIC_WS_URL:-ws://ws.localhost/ws}"
 
 usage() {
   cat <<EOF
@@ -23,12 +23,12 @@ Options:
 
 Environment:
   IMAGE
-  NEXT_PUBLIC_API_URL   Baked into the client bundle (default: http://localhost:8080)
-  NEXT_PUBLIC_WS_URL    Baked into the client bundle (default: ws://localhost:8081/ws)
+  NEXT_PUBLIC_API_URL   Baked into the client bundle (default: http://api.localhost)
+  NEXT_PUBLIC_WS_URL    Baked into the client bundle (default: ws://ws.localhost/ws)
 
 Examples:
   $(basename "$0")
-  NEXT_PUBLIC_API_URL=http://localhost:8080 $(basename "$0")
+  NEXT_PUBLIC_API_URL=http://api.localhost $(basename "$0") --load-kind
 EOF
 }
 

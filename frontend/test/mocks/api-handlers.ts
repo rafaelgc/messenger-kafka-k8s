@@ -2,7 +2,7 @@ import type { ChatListItem, MessageItem } from "@/lib/api";
 import { http, HttpResponse } from "msw";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+  process.env.NEXT_PUBLIC_API_URL ?? "http://api.localhost";
 
 export const testChatMembers = {
   alice: { id: "user-1", nickname: "alice" },

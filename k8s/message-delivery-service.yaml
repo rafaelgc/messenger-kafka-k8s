@@ -5,7 +5,6 @@ kind: Service
 metadata:
   name: message-delivery
 spec:
-  type: LoadBalancer
   selector:
     app.kubernetes.io/name: message-delivery
   ports:

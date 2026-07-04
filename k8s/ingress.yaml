@@ -1,0 +1,63 @@
+# Host-based ingress for public-api and message-delivery (WebSocket).
+# No path rewriting — backends serve /users, /chats, /ws at the root path.
+#
+# Requires an Ingress controller. For local Docker Desktop / kind:
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/cloud/deploy.yaml
+#   kubectl wait --namespace ingress-nginx --for=condition=ready pod -l app.kubernetes.io/component=controller --timeout=120s
+#
+# DNS: app.localhost, api.localhost, and ws.localhost → 127.0.0.1
+# (browsers often resolve *.localhost automatically; /etc/hosts works too).
+#
+# Routes:
+#   http://app.localhost        → frontend
+#   http://api.localhost/*      → public-api-service
+#   ws://ws.localhost/ws        → message-delivery
+#
+# Rebuild frontend after URL changes (NEXT_PUBLIC_* are baked at build time):
+#   NEXT_PUBLIC_API_URL=http://api.localhost
+#   NEXT_PUBLIC_WS_URL=ws://ws.localhost/ws
+#   scripts/build-frontend.sh --load-kind
+#
+# EKS (ALB): use ingressClassName alb and group Ingresses with
+#   alb.ingress.kubernetes.io/group.name: messaging
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: messaging
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: app.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 3000
+    - host: api.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: public-api-service
+                port:
+                  number: 8080
+    - host: ws.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: message-delivery
+                port:
+                  number: 8081

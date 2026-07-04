@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { server } from "@/test/mocks/server";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+  process.env.NEXT_PUBLIC_API_URL ?? "http://api.localhost";
 
 describe("api client", () => {
   it("registers a user", async () => {

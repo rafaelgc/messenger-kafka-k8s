@@ -1,5 +1,5 @@
 const WS_BASE_URL =
-  process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8081/ws";
+  process.env.NEXT_PUBLIC_WS_URL ?? "ws://ws.localhost/ws";
 
 export const MESSAGE_DELIVERY_WS_URL = WS_BASE_URL.endsWith("/ws")
   ? WS_BASE_URL

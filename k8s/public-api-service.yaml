@@ -4,7 +4,6 @@ kind: Service
 metadata:
   name: public-api-service
 spec:
-  type: LoadBalancer
   selector:
     app.kubernetes.io/name: public-api-service
   ports:
@@ -47,7 +46,7 @@ spec:
             - name: JWT_SECRET
               value: dev-jwt-secret-change-in-production
             - name: CORS_ALLOWED_ORIGIN
-              value: http://localhost:3000
+              value: http://app.localhost
             - name: POD_NAME
               valueFrom:
                 fieldRef:
