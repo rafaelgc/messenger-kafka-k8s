@@ -11,8 +11,8 @@
 #   http://app.localhost        → frontend
 #   http://api.localhost/*      → public-api-service
 #   ws://ws.localhost/ws        → message-delivery
-#   http://kafka.localhost      → kafka-ui (dev tooling)
-#   http://mongo.localhost      → mongo-express (dev tooling)
+#   http://kafka.localhost      → kafka-ui
+#   http://mongo.localhost      → mongo-express
 #
 # Rebuild frontend after URL changes (NEXT_PUBLIC_* are baked at build time):
 #   NEXT_PUBLIC_API_URL=http://api.localhost
@@ -26,11 +26,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: messaging
-  annotations:
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 spec:
-  ingressClassName: nginx
   rules:
     - host: app.localhost
       http:

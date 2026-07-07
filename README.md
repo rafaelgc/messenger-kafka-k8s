@@ -69,6 +69,28 @@ docker compose up frontend
 
 See `.env.example` for configurable environment variables.
 
+### Local Kubernetes
+
+Manifests live under `k8s/` (Kustomize base + `overlays/local` and `overlays/prod`). The overlay deploys application services only; the cluster still needs platform add-ons (ingress controller, MongoDB operator).
+
+**Prerequisites:** a running cluster (Docker Desktop Kubernetes or kind), `kubectl`, and `helm`.
+
+After creating or resetting a cluster, install those add-ons once:
+
+```bash
+./scripts/setup-local-cluster.sh
+```
+
+The script checks cluster connectivity, installs **ingress-nginx**, and installs the **MongoDB Community Operator** (with CRDs). It is safe to re-run if a component is already present.
+
+Then deploy the app:
+
+```bash
+kubectl apply -k k8s/overlays/local
+```
+
+Services are exposed via host-based ingress — for example `http://app.localhost` for the frontend (not `http://localhost:3000`). See comments in `k8s/base/ingress.yaml` for all routes and DNS notes.
+
 ### Production images
 
 Each service also has a multi-stage `services/<name>/Dockerfile` for production or CI builds. Those compile a release binary into a minimal runtime image and are not used by `docker compose up`.

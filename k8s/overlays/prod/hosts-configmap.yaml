@@ -1,0 +1,11 @@
+# Production hostnames. Replacements in kustomization.yaml map these onto ingress rules.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingress-hosts
+data:
+  app: app.example.com
+  api: api.example.com
+  ws: ws.example.com
+  kafka: kafka.example.com
+  mongo: mongo.example.com

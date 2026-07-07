@@ -1,0 +1,71 @@
+# EKS production with AWS Load Balancer Controller (ALB).
+#
+# Requires the ALB controller (installed by CDK in messenger-stack.ts).
+#
+# Apply:
+#   kubectl apply -k k8s/overlays/prod
+#
+# Before deploying, set hostnames in hosts-configmap.yaml and rebuild the frontend
+# with matching NEXT_PUBLIC_API_URL / NEXT_PUBLIC_WS_URL.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - hosts-configmap.yaml
+
+patches:
+  - path: ingress-patch.yaml
+
+# Rule order matches base/ingress.yaml: app, api, ws, kafka, mongo.
+replacements:
+  - source:
+      kind: ConfigMap
+      name: ingress-hosts
+      fieldPath: data.app
+    targets:
+      - select:
+          kind: Ingress
+          name: messaging
+        fieldPaths:
+          - spec.rules.0.host
+  - source:
+      kind: ConfigMap
+      name: ingress-hosts
+      fieldPath: data.api
+    targets:
+      - select:
+          kind: Ingress
+          name: messaging
+        fieldPaths:
+          - spec.rules.1.host
+  - source:
+      kind: ConfigMap
+      name: ingress-hosts
+      fieldPath: data.ws
+    targets:
+      - select:
+          kind: Ingress
+          name: messaging
+        fieldPaths:
+          - spec.rules.2.host
+  - source:
+      kind: ConfigMap
+      name: ingress-hosts
+      fieldPath: data.kafka
+    targets:
+      - select:
+          kind: Ingress
+          name: messaging
+        fieldPaths:
+          - spec.rules.3.host
+  - source:
+      kind: ConfigMap
+      name: ingress-hosts
+      fieldPath: data.mongo
+    targets:
+      - select:
+          kind: Ingress
+          name: messaging
+        fieldPaths:
+          - spec.rules.4.host
