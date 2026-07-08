@@ -140,6 +140,15 @@ After deploy, configure `kubectl` for the new cluster (on the host or inside a c
 aws eks update-kubeconfig --name <cluster-name> --region <region>
 ```
 
+CDK also installs the **Amazon EBS CSI driver** addon and a default **`gp3` StorageClass** so PersistentVolumeClaims can provision EBS volumes. If you deployed the app before this was in place, delete stuck Pending PVCs and re-apply the overlay:
+
+```bash
+kubectl delete pvc --all -A
+kubectl apply -k k8s/overlays/prod
+```
+
+(`WaitForFirstConsumer` binding is normal: PVCs stay Pending until a pod that uses them is scheduled.)
+
 #### Step 3. Build and push images to ECR
 
 EKS nodes pull application images from Amazon ECR. Build every service image and push it:
