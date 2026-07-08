@@ -41,6 +41,10 @@ spec:
       labels:
         app.kubernetes.io/name: kafka
     spec:
+      # Bitnami-based image runs as UID 1001; EBS volumes mount as root without fsGroup.
+      securityContext:
+        fsGroup: 1001
+        fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: kafka-container
           image: soldevelo/kafka:3.9
