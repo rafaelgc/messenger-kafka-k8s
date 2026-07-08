@@ -1,9 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
-import { AlbControllerVersion, CapacityType, Cluster, KubernetesVersion } from 'aws-cdk-lib/aws-eks';
+import { AlbControllerVersion, CapacityType, Cluster, KubernetesVersion, NodegroupAmiType } from 'aws-cdk-lib/aws-eks';
 import { Construct } from 'constructs';
 import { KubectlV35Layer } from '@aws-cdk/lambda-layer-kubectl-v35';
 import { FargateCluster } from 'aws-cdk-lib/aws-eks-v2';
 import { InstanceType } from 'aws-cdk-lib/aws-ec2';
+import { User } from 'aws-cdk-lib/aws-iam';
 
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
 
@@ -23,12 +24,24 @@ export class MessengerStack extends cdk.Stack {
     });
 
     cluster.addNodegroupCapacity('MessengerNodegroup', {
-      instanceTypes: [new InstanceType('m5.large')],
-      minSize: 2,
+      instanceTypes: [new InstanceType('t4g.large')], // m5.large
+      minSize: 1,
       maxSize: 4,
-      diskSize: 5,
+      diskSize: 20, // Minimum for AL2023.
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      capacityType: CapacityType.ON_DEMAND, // [IMPROVE] Consider using SPOT for stateless services.
+      // [IMPROVE] Consider using SPOT for stateless services and
+      // ON_DEMAND for stateful services (database).
+      capacityType: CapacityType.SPOT,
+      amiType: NodegroupAmiType.AL2023_ARM_64_STANDARD,
     });
+
+    cluster.awsAuth.addUserMapping(
+      User.fromUserArn(
+        this,
+        'RafaCli',
+        'arn:aws:iam::906876370565:user/rafa-cli', // [TODO] Do not hardcode.
+      ),
+      { username: 'rafa-cli', groups: ['system:masters'] },
+    );
   }
 }

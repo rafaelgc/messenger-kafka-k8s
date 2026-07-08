@@ -91,6 +91,85 @@ kubectl apply -k k8s/overlays/local
 
 Services are exposed via host-based ingress — for example `http://app.localhost` for the frontend (not `http://localhost:3000`). See comments in `k8s/base/ingress.yaml` for all routes and DNS notes.
 
+### Deploying to AWS (EKS)
+
+Infrastructure is defined in `infra/` (AWS CDK). Application manifests are under `k8s/overlays/prod`. The CDK container (`infra/Dockerfile`) bundles the CDK CLI, AWS CLI, and `kubectl` so you do not need them installed on the host.
+
+**Prerequisites**
+
+- Docker
+- AWS credentials configured on the **host** (`aws configure`, SSO, or environment variables). The container reads them from `~/.aws` at runtime — configure AWS on the host first, then mount that directory into the container.
+
+Run all commands below from the **repository root**.
+
+#### Step 1. Build the CDK container image
+
+```bash
+docker build -t cdk-cli -f infra/Dockerfile infra
+```
+
+Verify:
+
+```bash
+docker run --rm cdk-cli --version
+```
+
+#### Step 2. Preview infrastructure changes (`cdk diff`)
+
+```bash
+docker run --rm \
+  -v "$PWD/infra:/workspace" \
+  -v ~/.aws:/root/.aws:ro \
+  -w /workspace \
+  cdk-cli diff
+```
+
+To create or update the EKS cluster, use the same mounts with `deploy` instead of `diff`:
+
+```bash
+docker run --rm \
+  -v "$PWD/infra:/workspace" \
+  -v ~/.aws:/root/.aws:ro \
+  -w /workspace \
+  cdk-cli deploy
+```
+
+After deploy, configure `kubectl` for the new cluster (on the host or inside a container shell):
+
+```bash
+aws eks update-kubeconfig --name <cluster-name> --region <region>
+```
+
+#### Step 3. Deploy the application (`kubectl apply`)
+
+Install cluster add-ons once (MongoDB operator; skip ingress-nginx on EKS — the ALB controller is installed by CDK):
+
+```bash
+./scripts/setup-local-cluster.sh --skip-ingress-nginx
+```
+
+Deploy manifests:
+
+```bash
+kubectl apply -k k8s/overlays/prod
+```
+
+Or run `kubectl` from the CDK container (mount the repo, AWS creds, and kubeconfig):
+
+```bash
+docker run --rm \
+  -v "$PWD:/repo" \
+  -v ~/.aws:/root/.aws:ro \
+  -v ~/.kube:/root/.kube:ro \
+  -w /repo \
+  --entrypoint kubectl \
+  cdk-cli apply -k k8s/overlays/prod
+```
+
+Before going live, set production hostnames in `k8s/overlays/prod/hosts-configmap.yaml`, then point DNS at the ALB (`kubectl get ingress messaging -o wide`).
+
+**Teardown:** delete the Ingress (or the whole prod overlay) and wait for the ALB to be removed **before** `cdk destroy`, or subnet deletion may fail.
+
 ### Production images
 
 Each service also has a multi-stage `services/<name>/Dockerfile` for production or CI builds. Those compile a release binary into a minimal runtime image and are not used by `docker compose up`.

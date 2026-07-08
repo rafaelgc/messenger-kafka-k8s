@@ -10,26 +10,36 @@ MONGODB_OPERATOR_RELEASE="${MONGODB_OPERATOR_RELEASE:-community-operator}"
 MONGODB_OPERATOR_NAMESPACE="${MONGODB_OPERATOR_NAMESPACE:-mongodb-operator}"
 MONGODB_OPERATOR_CHART="${MONGODB_OPERATOR_CHART:-mongodb/community-operator}"
 
+INSTALL_INGRESS_NGINX=true
+
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [options]
 
-Install cluster prerequisites for local Kubernetes development:
-  - ingress-nginx controller
+Install cluster prerequisites before deploying the app:
+  - ingress-nginx controller (local only; skip on EKS)
   - MongoDB Community Operator (CRDs + operator in ${MONGODB_OPERATOR_NAMESPACE})
 
 Run once on a new cluster or after a cluster reset, before:
-  kubectl apply -k k8s/overlays/local
+  kubectl apply -k k8s/overlays/<local|prod>
 
 Options:
-  -h, --help   Show this help
+  --skip-ingress-nginx   Do not install ingress-nginx. Use this on EKS, where the
+                         AWS Load Balancer Controller (installed by CDK) handles the
+                         Ingress and the upstream nginx manifest would provision an
+                         unwanted (billed) load balancer.
+  -h, --help             Show this help
 
-Requires: kubectl, helm, and a reachable cluster (Docker Desktop / kind).
+Requires: kubectl, helm, and a reachable cluster.
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --skip-ingress-nginx)
+      INSTALL_INGRESS_NGINX=false
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -63,16 +73,20 @@ if ! kubectl cluster-info >/dev/null 2>&1; then
   exit 1
 fi
 
-log "Installing ingress-nginx controller"
-if kubectl get deployment -n ingress-nginx ingress-nginx-controller >/dev/null 2>&1; then
-  echo "    ingress-nginx already installed; waiting for controller to be ready"
+if [[ "${INSTALL_INGRESS_NGINX}" == "true" ]]; then
+  log "Installing ingress-nginx controller"
+  if kubectl get deployment -n ingress-nginx ingress-nginx-controller >/dev/null 2>&1; then
+    echo "    ingress-nginx already installed; waiting for controller to be ready"
+  else
+    kubectl apply -f "${INGRESS_NGINX_MANIFEST}"
+  fi
+  kubectl wait --namespace ingress-nginx \
+    --for=condition=ready pod \
+    -l app.kubernetes.io/component=controller \
+    --timeout=180s
 else
-  kubectl apply -f "${INGRESS_NGINX_MANIFEST}"
+  log "Skipping ingress-nginx (--skip-ingress-nginx); expecting an existing Ingress controller (e.g. AWS Load Balancer Controller on EKS)"
 fi
-kubectl wait --namespace ingress-nginx \
-  --for=condition=ready pod \
-  -l app.kubernetes.io/component=controller \
-  --timeout=180s
 
 log "Installing MongoDB Community Operator"
 if ! helm repo list | awk '{print $1}' | grep -qx "${MONGODB_HELM_REPO}"; then
@@ -102,6 +116,13 @@ kubectl rollout status deployment/mongodb-kubernetes-operator \
 log "Cluster prerequisites are ready"
 echo
 echo "Next: deploy the application with"
-echo "  kubectl apply -k k8s/overlays/local"
-echo
-echo "Then open http://app.localhost (and other *.localhost hosts from k8s/base/ingress.yaml)."
+if [[ "${INSTALL_INGRESS_NGINX}" == "true" ]]; then
+  echo "  kubectl apply -k k8s/overlays/local"
+  echo
+  echo "Then open http://app.localhost (and other *.localhost hosts from k8s/base/ingress.yaml)."
+else
+  echo "  kubectl apply -k k8s/overlays/prod"
+  echo
+  echo "Then point DNS at the ALB created by the AWS Load Balancer Controller"
+  echo "(kubectl get ingress messaging -o wide)."
+fi
