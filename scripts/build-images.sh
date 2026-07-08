@@ -46,7 +46,7 @@ Examples:
 Notes:
   - Local kind clusters use --load-kind; EKS pulls from ECR (use --push-ecr).
   - ECR repository names match service names (e.g. users, frontend).
-  - Prod manifests must reference ECR image URLs (not yet wired in k8s overlays).
+  - Prod manifests: run ./scripts/configure-prod-ecr.sh before kubectl apply -k k8s/overlays/prod
   - NEXT_PUBLIC_API_URL and NEXT_PUBLIC_WS_URL are read by build-frontend.sh.
 EOF
 }

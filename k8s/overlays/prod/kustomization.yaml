@@ -14,6 +14,9 @@ resources:
   - ../../base
   - hosts-configmap.yaml
 
+components:
+  - ecr
+
 patches:
   - path: ingress-patch.yaml
 

@@ -127,7 +127,7 @@ docker run --rm \
 To create or update the EKS cluster, use the same mounts with `deploy` instead of `diff`:
 
 ```bash
-docker run --rm \
+docker run --rm -it \
   -v "$PWD/infra:/workspace" \
   -v ~/.aws:/root/.aws:ro \
   -w /workspace \
@@ -140,7 +140,27 @@ After deploy, configure `kubectl` for the new cluster (on the host or inside a c
 aws eks update-kubeconfig --name <cluster-name> --region <region>
 ```
 
-#### Step 3. Deploy the application (`kubectl apply`)
+#### Step 3. Build and push images to ECR
+
+EKS nodes pull application images from Amazon ECR. Build every service image and push it:
+
+```bash
+./scripts/build-images.sh --all --push-ecr
+```
+
+Requires AWS credentials and a configured region (`AWS_REGION` or `aws configure`). The script creates ECR repositories if needed (one per service name) and pushes tags such as `<account>.dkr.ecr.<region>.amazonaws.com/users:latest`.
+
+For the frontend, set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL` to your production API and WebSocket URLs before building (see `.env.example`). EKS nodes are ARM64 (`t4g.large`); images built on Apple Silicon match that architecture automatically.
+
+Point the prod Kubernetes manifests at ECR (otherwise Kubernetes treats names like `frontend:latest` as Docker Hub):
+
+```bash
+./scripts/configure-prod-ecr.sh
+```
+
+This rewrites `k8s/overlays/prod/ecr/kustomization.yaml` with your registry host. EKS worker nodes already use their IAM role to pull from ECR in the same account — no `imagePullSecrets` needed.
+
+#### Step 4. Deploy the application (`kubectl apply`)
 
 Install cluster add-ons once (MongoDB operator; skip ingress-nginx on EKS — the ALB controller is installed by CDK):
 
