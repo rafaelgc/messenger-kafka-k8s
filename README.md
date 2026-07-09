@@ -137,17 +137,11 @@ docker run --rm -it \
 After deploy, configure `kubectl` for the new cluster (on the host or inside a container shell):
 
 ```bash
+aws eks list-clusters
 aws eks update-kubeconfig --name <cluster-name> --region <region>
 ```
 
-CDK also installs the **Amazon EBS CSI driver** addon and a default **`gp3` StorageClass** so PersistentVolumeClaims can provision EBS volumes. If you deployed the app before this was in place, delete stuck Pending PVCs and re-apply the overlay:
-
-```bash
-kubectl delete pvc --all -A
-kubectl apply -k k8s/overlays/prod
-```
-
-(`WaitForFirstConsumer` binding is normal: PVCs stay Pending until a pod that uses them is scheduled.)
+CDK also installs the **Amazon EBS CSI driver** addon and a default **`gp3` StorageClass** so PersistentVolumeClaims can provision EBS volumes.
 
 #### Step 3. Build and push images to ECR
 
@@ -159,25 +153,31 @@ EKS nodes pull application images from Amazon ECR. Build every service image and
 
 Requires AWS credentials and a configured region (`AWS_REGION` or `aws configure`). The script creates ECR repositories if needed (one per service name) and pushes tags such as `<account>.dkr.ecr.<region>.amazonaws.com/users:latest`.
 
-For the frontend, set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL` to your production API and WebSocket URLs before building (see `.env.example`). EKS nodes are ARM64 (`t4g.large`); images built on Apple Silicon match that architecture automatically.
+For the frontend, URLs are read from `frontend/.env.prod` (edit that file for your domains). EKS nodes are ARM64 (`t4g.large`); images built on Apple Silicon match that architecture automatically.
 
-Point the prod Kubernetes manifests at ECR (otherwise Kubernetes treats names like `frontend:latest` as Docker Hub):
+#### Step 4. Configure the prod overlay
+
+Before `kubectl apply`, point manifests at ECR and set your hostnames:
 
 ```bash
 ./scripts/configure-prod-ecr.sh
 ```
 
-This rewrites `k8s/overlays/prod/ecr/kustomization.yaml` with your registry host. EKS worker nodes already use their IAM role to pull from ECR in the same account — no `imagePullSecrets` needed.
+This rewrites `k8s/overlays/prod/ecr/kustomization.yaml` with your registry host (otherwise Kubernetes treats names like `frontend:latest` as Docker Hub). EKS worker nodes use their IAM role to pull from ECR in the same account — no `imagePullSecrets` needed.
 
-#### Step 4. Deploy the application (`kubectl apply`)
+Edit production hostnames in `k8s/overlays/prod/hosts-configmap.yaml`.
 
-Install cluster add-ons once (MongoDB operator; skip ingress-nginx on EKS — the ALB controller is installed by CDK):
+#### Step 5. Install cluster add-ons
+
+Install the MongoDB Community Operator once (skip ingress-nginx on EKS — the ALB controller is installed by CDK):
 
 ```bash
 ./scripts/setup-local-cluster.sh --skip-ingress-nginx
 ```
 
-Deploy manifests:
+The operator must be running before you apply manifests that create `MongoDBCommunity` resources.
+
+#### Step 6. Deploy the application (`kubectl apply`)
 
 ```bash
 kubectl apply -k k8s/overlays/prod
@@ -195,7 +195,16 @@ docker run --rm \
   cdk-cli apply -k k8s/overlays/prod
 ```
 
-Before going live, set production hostnames in `k8s/overlays/prod/hosts-configmap.yaml`, then point DNS at the ALB (`kubectl get ingress messaging -o wide`).
+After deploy, point DNS at the ALB (`kubectl get ingress messaging -o wide`).
+
+**PVC troubleshooting:** if PVCs were created before the EBS CSI driver / default StorageClass existed, delete stuck claims and re-apply:
+
+```bash
+kubectl delete pvc --all -A
+kubectl apply -k k8s/overlays/prod
+```
+
+(`WaitForFirstConsumer` binding is normal: PVCs stay Pending until a pod that uses them is scheduled.)
 
 **Teardown:** delete the Ingress (or the whole prod overlay) and wait for the ALB to be removed **before** `cdk destroy`, or subnet deletion may fail.
 

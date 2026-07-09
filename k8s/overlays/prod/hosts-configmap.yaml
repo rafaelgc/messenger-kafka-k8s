@@ -4,8 +4,8 @@ kind: ConfigMap
 metadata:
   name: ingress-hosts
 data:
-  app: app.example.com
-  api: api.example.com
-  ws: ws.example.com
-  kafka: kafka.example.com
-  mongo: mongo.example.com
+  app: app.messenger.rgonzalez.xyz
+  api: api.messenger.rgonzalez.xyz
+  ws: ws.messenger.rgonzalez.xyz
+  kafka: kafka.messenger.rgonzalez.xyz
+  mongo: mongo.messenger.rgonzalez.xyz

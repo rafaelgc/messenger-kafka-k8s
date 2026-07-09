@@ -4,6 +4,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPTS_DIR="${ROOT}/scripts"
 
+# shellcheck source=push-ecr.sh
+source "${SCRIPTS_DIR}/push-ecr.sh"
+
 TAG="latest"
 LOAD_KIND=false
 PUSH_ECR=false
@@ -47,7 +50,7 @@ Notes:
   - Local kind clusters use --load-kind; EKS pulls from ECR (use --push-ecr).
   - ECR repository names match service names (e.g. users, frontend).
   - Prod manifests: run ./scripts/configure-prod-ecr.sh before kubectl apply -k k8s/overlays/prod
-  - NEXT_PUBLIC_API_URL and NEXT_PUBLIC_WS_URL are read by build-frontend.sh.
+  - Frontend URLs: frontend/.env.prod (default build) or frontend/.env with build-frontend.sh --dev
 EOF
 }
 
@@ -106,53 +109,6 @@ require_command() {
   fi
 }
 
-init_ecr() {
-  require_command aws
-  AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}"
-  if [[ -z "${AWS_REGION}" ]]; then
-    AWS_REGION="$(aws configure get region 2>/dev/null || true)"
-  fi
-  if [[ -z "${AWS_REGION}" ]]; then
-    echo "error: set AWS_REGION or configure a default region for --push-ecr" >&2
-    exit 1
-  fi
-  AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}"
-  ECR_REGISTRY="${ECR_REGISTRY:-${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com}"
-  echo "ECR registry: ${ECR_REGISTRY}"
-}
-
-ecr_login() {
-  if [[ "${ECR_LOGIN_DONE}" == "false" ]]; then
-    aws ecr get-login-password --region "${AWS_REGION}" \
-      | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
-    ECR_LOGIN_DONE=true
-  fi
-}
-
-ensure_ecr_repository() {
-  local repo="$1"
-  if ! aws ecr describe-repositories \
-    --repository-names "${repo}" \
-    --region "${AWS_REGION}" >/dev/null 2>&1; then
-    echo "Creating ECR repository ${repo}"
-    aws ecr create-repository \
-      --repository-name "${repo}" \
-      --region "${AWS_REGION}" >/dev/null
-  fi
-}
-
-push_to_ecr() {
-  local svc="$1"
-  local local_image="${svc}:${TAG}"
-  local remote_image="${ECR_REGISTRY}/${svc}:${TAG}"
-
-  ecr_login
-  ensure_ecr_repository "${svc}"
-  docker tag "${local_image}" "${remote_image}"
-  docker push "${remote_image}"
-  echo "Pushed ${remote_image}"
-}
-
 load_into_kind() {
   local image="$1"
   if ! command -v kind >/dev/null 2>&1; then
@@ -181,14 +137,14 @@ build_rust_service() {
     load_into_kind "${image}"
   fi
   if [[ "${PUSH_ECR}" == "true" ]]; then
-    push_to_ecr "${svc}"
+    push_ecr_push "${svc}" "${image}" "${TAG}"
   fi
 }
 
 export DOCKER_BUILDKIT=1
 
 if [[ "${PUSH_ECR}" == "true" ]]; then
-  init_ecr
+  push_ecr_init
 fi
 
 for svc in "${SERVICES[@]}"; do
@@ -199,13 +155,13 @@ for svc in "${SERVICES[@]}"; do
       if [[ "${LOAD_KIND}" == "true" ]]; then
         args+=("--load-kind")
       fi
+      if [[ "${PUSH_ECR}" == "true" ]]; then
+        args+=("--push-ecr")
+      fi
       if [[ -n "${NO_CACHE}" ]]; then
         args+=("--no-cache")
       fi
       "${SCRIPTS_DIR}/build-frontend.sh" "${args[@]}"
-      if [[ "${PUSH_ECR}" == "true" ]]; then
-        push_to_ecr "frontend"
-      fi
       ;;
     users)
       build_rust_service "users" "${ROOT}/services/users"
