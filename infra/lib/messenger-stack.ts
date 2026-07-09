@@ -30,10 +30,11 @@ export class MessengerStack extends cdk.Stack {
       defaultCapacity: 0, // The capacity is defined later.
     });
 
+    // EKS tags the underlying Auto Scaling group for Cluster Autoscaler discovery on create.
     cluster.addNodegroupCapacity('MessengerNodegroup', {
       instanceTypes: [new InstanceType('t4g.large')], // m5.large
       minSize: 1,
-      maxSize: 4,
+      maxSize: 6,
       diskSize: 20, // Minimum for AL2023.
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       // [IMPROVE] Consider using SPOT for stateless services and
@@ -52,6 +53,97 @@ export class MessengerStack extends cdk.Stack {
     );
 
     this.addEbsCsiDriverWithDefaultStorageClass(cluster);
+    this.addClusterAutoscaler(cluster);
+  }
+
+  /**
+   * Cluster Autoscaler: IRSA (kube-system/cluster-autoscaler) + Helm release.
+   * EKS tags the managed node group's ASG for auto-discovery on create.
+   */
+  private addClusterAutoscaler(cluster: Cluster): void {
+    const clusterAutoscaler = cluster.addServiceAccount('ClusterAutoscaler', {
+      name: 'cluster-autoscaler',
+      namespace: 'kube-system',
+      labels: {
+        'k8s-addon': 'cluster-autoscaler.addons.k8s.io',
+        'k8s-app': 'cluster-autoscaler',
+      },
+    });
+
+    // Read AWS / EKS state: discover ASGs, instance types, scheduling pressure, etc.
+    clusterAutoscaler.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'autoscaling:DescribeAutoScalingGroups',
+          'autoscaling:DescribeAutoScalingInstances',
+          'autoscaling:DescribeLaunchConfigurations',
+          'autoscaling:DescribeScalingActivities',
+          'autoscaling:DescribeTags',
+          'ec2:DescribeImages',
+          'ec2:DescribeInstanceTypes',
+          'ec2:DescribeLaunchTemplateVersions',
+          'ec2:GetInstanceTypesFromInstanceRequirements',
+          'eks:DescribeNodegroup',
+        ],
+        resources: ['*'],
+      }),
+    );
+
+    // Scale only ASGs tagged for this cluster (see EKS managed node group ASG tags).
+    const clusterAutoscalerScaleCondition = new cdk.CfnJson(
+      this,
+      'ClusterAutoscalerScaleCondition',
+      {
+        value: {
+          [`aws:ResourceTag/k8s.io/cluster-autoscaler/${cluster.clusterName}`]:
+            'owned',
+        },
+      },
+    );
+
+    const scaleStatement = new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'autoscaling:SetDesiredCapacity',
+        'autoscaling:TerminateInstanceInAutoScalingGroup',
+      ],
+      resources: ['*'],
+    });
+    scaleStatement.addCondition(
+      'StringEquals',
+      clusterAutoscalerScaleCondition,
+    );
+    clusterAutoscaler.addToPrincipalPolicy(scaleStatement);
+
+    const chart = cluster.addHelmChart('ClusterAutoscalerChart', {
+      chart: 'cluster-autoscaler',
+      repository: 'https://kubernetes.github.io/autoscaler',
+      namespace: 'kube-system',
+      release: 'cluster-autoscaler',
+      // Chart 9.46.6 ships cluster-autoscaler v1.32.0 (match KubernetesVersion.V1_32).
+      version: '9.46.6',
+      createNamespace: false,
+      wait: true,
+      timeout: cdk.Duration.minutes(5),
+      values: {
+        autoDiscovery: {
+          clusterName: cluster.clusterName,
+        },
+        awsRegion: this.region,
+        rbac: {
+          serviceAccount: {
+            create: false,
+            name: 'cluster-autoscaler',
+          },
+        },
+        extraArgs: {
+          'balance-similar-node-groups': 'true',
+          'skip-nodes-with-system-pods': 'false',
+        },
+      },
+    });
+    chart.node.addDependency(clusterAutoscaler);
   }
 
   /**

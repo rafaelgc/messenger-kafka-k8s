@@ -206,7 +206,39 @@ kubectl apply -k k8s/overlays/prod
 
 (`WaitForFirstConsumer` binding is normal: PVCs stay Pending until a pod that uses them is scheduled.)
 
-**Teardown:** delete the Ingress (or the whole prod overlay) and wait for the ALB to be removed **before** `cdk destroy`, or subnet deletion may fail.
+#### Cleaning up (EKS)
+
+Remove workloads from the cluster (reverse of `kubectl apply`):
+
+```bash
+kubectl delete -k k8s/overlays/prod
+```
+
+Some StatefulSet PVCs (for example sharded MongoDB) are **not** deleted automatically and keep their data on EBS. To wipe all volumes as well:
+
+```bash
+kubectl delete pvc -A --all
+```
+
+The MongoDB operator is installed separately via Helm. To remove it:
+
+```bash
+helm uninstall community-operator -n mongodb-operator
+```
+
+Destroy the AWS infrastructure (EKS cluster, node group, ALB controller, etc.):
+
+```bash
+docker run --rm -it \
+  -v "$PWD/infra:/workspace" \
+  -v ~/.aws:/root/.aws:ro \
+  -w /workspace \
+  cdk-cli destroy
+```
+
+Delete the Ingress or the whole prod overlay **before** `cdk destroy`, and wait for the ALB to be removed — otherwise subnet deletion may fail.
+
+For a **local** cluster, remove the app with `kubectl delete -k k8s/overlays/local` instead.
 
 ### Production images
 
