@@ -38,7 +38,7 @@ export class MessengerStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       // [IMPROVE] Consider using SPOT for stateless services and
       // ON_DEMAND for stateful services (database).
-      capacityType: CapacityType.SPOT,
+      capacityType: CapacityType.ON_DEMAND,
       amiType: NodegroupAmiType.AL2023_ARM_64_STANDARD,
     });
 
