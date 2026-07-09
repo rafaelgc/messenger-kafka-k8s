@@ -3,6 +3,10 @@ import type { MessageItem } from "@/lib/api";
 import type { MessageSentEvent } from "@/lib/message-delivery";
 import type { Message } from "@/lib/mock-data";
 
+function randomId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
 function objectIdToIsoDate(objectId: string): string {
   const timestamp = Number.parseInt(objectId.slice(0, 8), 16);
   return new Date(timestamp * 1000).toISOString();
@@ -124,7 +128,7 @@ export function mapWsMessageToUiMessage(
   currentUserNickname: string,
 ): Message {
   return {
-    id: `ws-${crypto.randomUUID()}`,
+    id: `ws-${randomId()}`,
     senderId: event.sender_id,
     senderName: resolveSenderName(
       event.sender_id,
@@ -143,7 +147,7 @@ export function createOptimisticMessage(
   currentUserNickname: string,
 ): Message {
   return {
-    id: `pending-${crypto.randomUUID()}`,
+    id: `pending-${randomId()}`,
     senderId: currentUserId,
     senderName: currentUserNickname,
     text,

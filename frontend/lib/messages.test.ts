@@ -10,7 +10,7 @@ import {
   removeMessage,
   resolveSenderName,
 } from "@/lib/messages";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 const members: ChatMember[] = [
   { id: "user-1", nickname: "Alice" },
@@ -120,21 +120,11 @@ describe("mergeOlderMessages", () => {
 });
 
 describe("createOptimisticMessage", () => {
-  beforeEach(() => {
-    vi.stubGlobal("crypto", {
-      randomUUID: () => "optimistic-uuid",
-    });
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it("creates a pending message for the current user", () => {
     const message = createOptimisticMessage("On the way", "user-1", "Alice");
 
+    expect(message.id).toMatch(/^pending-/);
     expect(message).toMatchObject({
-      id: "pending-optimistic-uuid",
       senderId: "user-1",
       senderName: "Alice",
       text: "On the way",
