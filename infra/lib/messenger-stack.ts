@@ -20,7 +20,7 @@ export class MessengerStack extends cdk.Stack {
     super(scope, id, props);
 
     const cluster = new Cluster(this, 'MessengerCluster', {
-      version: KubernetesVersion.V1_32,
+      version: KubernetesVersion.V1_35,
       kubectlLayer: new KubectlV35Layer(this, 'kubectl'),
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       // We need the ALB controller to support the Ingress.
