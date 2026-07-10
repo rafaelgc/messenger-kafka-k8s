@@ -1,4 +1,3 @@
-# Phase 1a: debug exporter until Tempo is deployed (Phase 1b).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -26,8 +25,10 @@ data:
             - k8s.node.name
 
     exporters:
-      debug:
-        verbosity: detailed
+      otlp/tempo:
+        endpoint: tempo.observability.svc.cluster.local:4317
+        tls:
+          insecure: true
 
     extensions:
       health_check:
@@ -39,4 +40,4 @@ data:
         traces:
           receivers: [otlp]
           processors: [k8sattributes, batch]
-          exporters: [debug]
+          exporters: [otlp/tempo]
