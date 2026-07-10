@@ -5,7 +5,7 @@
 #   kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/cloud/deploy.yaml
 #   kubectl wait --namespace ingress-nginx --for=condition=ready pod -l app.kubernetes.io/component=controller --timeout=120s
 #
-# DNS: app/api/ws/kafka/mongo.localhost → 127.0.0.1 (/etc/hosts if needed).
+# DNS: app/api/ws/kafka/mongo/grafana.localhost → 127.0.0.1 (/etc/hosts if needed).
 #
 # Routes:
 #   http://app.localhost        → frontend
@@ -13,6 +13,7 @@
 #   ws://ws.localhost/ws        → message-delivery
 #   http://kafka.localhost      → kafka-ui
 #   http://mongo.localhost      → mongo-express
+#   http://grafana.localhost    → grafana (observability namespace)
 #
 # Rebuild frontend after URL changes (NEXT_PUBLIC_* are baked at build time):
 #   scripts/build-frontend.sh --dev --load-kind   # frontend/.env
