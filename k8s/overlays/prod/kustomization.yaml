@@ -20,6 +20,7 @@ components:
 patches:
   - path: ingress-patch.yaml
   - path: grafana-ingress-patch.yaml
+  - path: public-api-otel-patch.yaml
 
 # Rule order matches base/ingress.yaml: app, api, ws, kafka, mongo.
 # Grafana Ingress (observability namespace) hostname is replaced separately below.

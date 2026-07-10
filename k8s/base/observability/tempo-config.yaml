@@ -11,8 +11,12 @@ data:
       receivers:
         otlp:
           protocols:
+            # Tempo 2.7+ binds OTLP to localhost by default; must listen on all
+            # interfaces so the collector can reach this pod via the Service.
             grpc:
+              endpoint: 0.0.0.0:4317
             http:
+              endpoint: 0.0.0.0:4318
 
     ingester:
       max_block_duration: 5m
