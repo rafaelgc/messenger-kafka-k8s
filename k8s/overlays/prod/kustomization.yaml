@@ -23,6 +23,7 @@ patches:
   - path: grafana-ingress-patch.yaml
   - path: public-api-otel-patch.yaml
   - path: public-api-spot-patch.yaml
+  - path: public-api-anti-affinity-patch.yaml
   - path: otel-collector-spot-patch.yaml
 
 # Rule order matches base/ingress.yaml: app, api, ws, kafka, mongo.
