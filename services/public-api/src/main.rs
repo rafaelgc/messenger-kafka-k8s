@@ -11,7 +11,7 @@ use rdkafka::{
 };
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tower_http::cors::CorsLayer;
 
 mod telemetry;
 mod topics;
@@ -224,7 +224,7 @@ async fn main() {
         )
         .with_state(state)
         .layer(cors)
-        .layer(TraceLayer::new_for_http());
+        .layer(telemetry::http_trace_layer());
 
     let bind_addr =
         std::env::var("PUBLIC_API_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".into());
