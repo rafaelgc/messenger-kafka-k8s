@@ -9,5 +9,6 @@ data:
   ws: ws.messenger.rgonzalez.xyz
   kafka: kafka.messenger.rgonzalez.xyz
   mongo: mongo.messenger.rgonzalez.xyz
+  grafana: grafana.messenger.rgonzalez.xyz
   # Browser origin for public-api CORS (scheme + host; must match where the frontend is served).
   cors_origin: http://app.messenger.rgonzalez.xyz

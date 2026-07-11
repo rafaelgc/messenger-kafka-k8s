@@ -14,3 +14,4 @@ resources:
 
 patches:
   - path: ingress-patch.yaml
+  - path: grafana-ingress-patch.yaml

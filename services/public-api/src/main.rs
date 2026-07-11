@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tower_http::cors::CorsLayer;
 
+mod telemetry;
 mod topics;
 
 #[derive(Clone)]
@@ -176,6 +177,8 @@ struct MessageSentEvent {
 
 #[tokio::main]
 async fn main() {
+    let telemetry = telemetry::TelemetryGuard::init();
+
     let chat_service_url =
         std::env::var("CHAT_SERVICE_URL").unwrap_or_else(|_| "http://chat:8085".into());
     let storage_service_url = std::env::var("STORAGE_SERVICE_URL")
@@ -220,12 +223,45 @@ async fn main() {
             get(list_messages).post(send_message),
         )
         .with_state(state)
-        .layer(cors);
+        .layer(cors)
+        .layer(telemetry::http_trace_layer());
 
     let bind_addr =
         std::env::var("PUBLIC_API_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".into());
     let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+
+    tracing::info!("public-api listening on {bind_addr}");
+
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .unwrap();
+
+    telemetry.shutdown();
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to listen for ctrl-c");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to listen for SIGTERM")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }
 
 fn create_producer() -> FutureProducer {
@@ -252,12 +288,13 @@ async fn create_user(
         state.users_service_url.trim_end_matches('/')
     );
 
-    let response = state
-        .http_client
-        .post(&url)
-        .json(&body)
-        .send()
-        .await
+    let response = telemetry::traced_execute(
+        &state.http_client,
+        state.http_client.post(&url).json(&body),
+        "users.create",
+        "users",
+    )
+    .await
         .map_err(|error| {
             eprintln!("failed to call users service to create user: {error}");
             StatusCode::BAD_GATEWAY
@@ -285,12 +322,13 @@ async fn authenticate(
         state.users_service_url.trim_end_matches('/')
     );
 
-    let response = state
-        .http_client
-        .post(&url)
-        .json(&body)
-        .send()
-        .await
+    let response = telemetry::traced_execute(
+        &state.http_client,
+        state.http_client.post(&url).json(&body),
+        "users.authenticate",
+        "users",
+    )
+    .await
         .map_err(|error| {
             eprintln!("failed to call users service to authenticate: {error}");
             StatusCode::BAD_GATEWAY
@@ -327,16 +365,20 @@ async fn list_chats(
         state.chat_service_url.trim_end_matches('/')
     );
 
-    let response = state
-        .http_client
-        .get(&url)
-        .query(&ListChatsForwardQuery {
-            member_id: user_id,
-            limit: query.limit,
-            before: query.before,
-        })
-        .send()
-        .await
+    let response = telemetry::traced_execute(
+        &state.http_client,
+        state
+            .http_client
+            .get(&url)
+            .query(&ListChatsForwardQuery {
+                member_id: user_id,
+                limit: query.limit,
+                before: query.before,
+            }),
+        "chat.list",
+        "chat",
+    )
+    .await
         .map_err(|error| {
             eprintln!("failed to call chat service to list chats: {error}");
             StatusCode::BAD_GATEWAY
@@ -404,19 +446,20 @@ async fn create_chat(
         state.chat_service_url.trim_end_matches('/')
     );
 
-    let response = state
-        .http_client
-        .post(&url)
-        .json(&CreateChatForwardRequest {
+    let response = telemetry::traced_execute(
+        &state.http_client,
+        state.http_client.post(&url).json(&CreateChatForwardRequest {
             creator: ChatMember {
                 id: claims.sub,
                 nickname: claims.nickname,
             },
             name: body.name,
             members,
-        })
-        .send()
-        .await
+        }),
+        "chat.create",
+        "chat",
+    )
+    .await
         .map_err(|error| {
             eprintln!("failed to call chat service to create chat: {error}");
             StatusCode::BAD_GATEWAY
@@ -467,12 +510,13 @@ async fn list_messages(
         state.storage_service_url.trim_end_matches('/')
     );
 
-    let response = state
-        .http_client
-        .get(&url)
-        .query(&query)
-        .send()
-        .await
+    let response = telemetry::traced_execute(
+        &state.http_client,
+        state.http_client.get(&url).query(&query),
+        "message-storage.list_messages",
+        "message-storage",
+    )
+    .await
         .map_err(|error| {
             eprintln!("failed to call storage service for chat_id={chat_id}: {error}");
             StatusCode::BAD_GATEWAY
@@ -585,7 +629,14 @@ async fn fetch_chat_members(state: &AppState, chat_id: &str) -> Result<Vec<ChatM
         state.chat_service_url.trim_end_matches('/')
     );
 
-    let response = state.http_client.get(&url).send().await.map_err(|error| {
+    let response = telemetry::traced_execute(
+        &state.http_client,
+        state.http_client.get(&url),
+        "chat.get",
+        "chat",
+    )
+    .await
+    .map_err(|error| {
         eprintln!("failed to call chat service for chat_id={chat_id}: {error}");
         StatusCode::BAD_GATEWAY
     })?;
@@ -625,12 +676,16 @@ async fn lookup_user_by_nickname(
         state.users_service_url.trim_end_matches('/')
     );
 
-    let response = state
-        .http_client
-        .get(&url)
-        .query(&[("nickname", nickname)])
-        .send()
-        .await
+    let response = telemetry::traced_execute(
+        &state.http_client,
+        state
+            .http_client
+            .get(&url)
+            .query(&[("nickname", nickname)]),
+        "users.lookup",
+        "users",
+    )
+    .await
         .map_err(|error| {
             eprintln!("failed to call users service for nickname={nickname}: {error}");
             StatusCode::BAD_GATEWAY
