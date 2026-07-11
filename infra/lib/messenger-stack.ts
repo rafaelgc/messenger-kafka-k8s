@@ -6,6 +6,7 @@ import {
   Cluster,
   KubernetesVersion,
   NodegroupAmiType,
+  TaintEffect,
 } from 'aws-cdk-lib/aws-eks';
 import { Construct } from 'constructs';
 import { KubectlV35Layer } from '@aws-cdk/lambda-layer-kubectl-v35';
@@ -30,17 +31,44 @@ export class MessengerStack extends cdk.Stack {
       defaultCapacity: 0, // The capacity is defined later.
     });
 
-    // EKS tags the underlying Auto Scaling group for Cluster Autoscaler discovery on create.
-    cluster.addNodegroupCapacity('MessengerNodegroup', {
-      instanceTypes: [new InstanceType('t4g.large')], // m5.large
-      minSize: 1,
-      maxSize: 6,
+    const nodegroupCommon = {
       diskSize: 20, // Minimum for AL2023.
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      // [IMPROVE] Consider using SPOT for stateless services and
-      // ON_DEMAND for stateful services (database).
-      capacityType: CapacityType.ON_DEMAND,
       amiType: NodegroupAmiType.AL2023_ARM_64_STANDARD,
+    };
+
+    // Stateful workloads (Kafka, MongoDB, Tempo, …). Spot-tainted nodes reject pods
+    // without the matching toleration, so existing services stay here by default.
+    // Keep construct id 'MessengerNodegroup' so CDK does not replace the existing ASG.
+    cluster.addNodegroupCapacity('MessengerNodegroup', {
+      ...nodegroupCommon,
+      instanceTypes: [new InstanceType('t4g.large')],
+      minSize: 1,
+      maxSize: 6,
+      capacityType: CapacityType.ON_DEMAND,
+    });
+
+    // Stateless app tiers (public-api first; more services migrate here gradually).
+    // Taint keeps spot nodes exclusive to workloads that opt in via toleration + affinity.
+    cluster.addNodegroupCapacity('MessengerSpotNodegroup', {
+      ...nodegroupCommon,
+      instanceTypes: [
+        new InstanceType('t4g.large'),
+        new InstanceType('t4g.xlarge'),
+        new InstanceType('m7g.large'),
+        new InstanceType('m6g.large'),
+      ],
+      minSize: 0,
+      maxSize: 4,
+      capacityType: CapacityType.SPOT,
+      taints: [
+        {
+          // Only pods with 'capacity-type: spot' can be scheduled on spot nodes.
+          key: 'capacity-type',
+          value: 'spot',
+          effect: TaintEffect.NO_SCHEDULE,
+        },
+      ],
     });
 
     cluster.awsAuth.addUserMapping(

@@ -1,0 +1,14 @@
+# Spot nodes are tainted in messenger-stack.ts; DaemonSet needs this to run one pod per node.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-collector
+  namespace: observability
+spec:
+  template:
+    spec:
+      tolerations:
+        - key: capacity-type
+          operator: Equal
+          value: spot
+          effect: NoSchedule
