@@ -1,4 +1,10 @@
-# Spread replicas across AZs so a single zone outage does not take out all pods.
+# Zone spread for message-delivery (prod). Spot: scheduling.messenger/spot + spot-patch.yaml.
+#
+# Goal:
+#   - HA: delivery must run in at least two AZs (minDomains: 2). A single-AZ layout is never allowed.
+#   - Scale: extra replicas may share an AZ as long as another AZ also has at least one pod.
+#   - Rollouts: matchLabelKeys lets old and new pods share an AZ briefly during rolling updates.
+#   - DoNotSchedule: pod stays Pending if only single-AZ placement is possible (CA can scale the other zone).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,10 +12,13 @@ metadata:
 spec:
   template:
     spec:
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchLabels:
-                  app.kubernetes.io/name: message-delivery
-              topologyKey: topology.kubernetes.io/zone
+      topologySpreadConstraints:
+        - maxSkew: 1
+          minDomains: 2
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: message-delivery
+          matchLabelKeys:
+            - pod-template-hash

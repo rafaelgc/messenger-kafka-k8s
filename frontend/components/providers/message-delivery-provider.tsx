@@ -94,6 +94,9 @@ export function MessageDeliveryProvider({ children }: { children: ReactNode }) {
         }
 
         reconnectAttemptRef.current = 0;
+        // [TODO] After reconnect, refetch open chat messages from the API. While the WebSocket
+        // is down (spot eviction, rollout, network blip), message.sent events are not pushed
+        // but are persisted by message-storage — the UI can miss live updates until refresh.
         socket.send(
           JSON.stringify({
             type: "auth",
