@@ -1,4 +1,13 @@
-# Spread mongos routers across AZs; spot scheduling comes from scheduling.messenger/spot label + spot-patch.yaml.
+# Zone spread for mongos (prod). Spot scheduling: scheduling.messenger/spot + spot-patch.yaml.
+#
+# Goal:
+#   - HA: mongos must run in at least two AZs (minDomains: 2). A single-AZ layout is never allowed.
+#   - Scale: extra replicas may share an AZ (e.g. 2 in us-east-2a, 1 in us-east-2b) as long as
+#     another AZ also has at least one pod — we are not capped at one pod per zone.
+#   - Rollouts: matchLabelKeys treats old and new ReplicaSet pods as separate groups, so a new
+#     version may briefly sit in the same AZ as the one it replaces during a rolling update.
+#   - DoNotSchedule: if the only option is single-AZ placement, the pod stays Pending so Cluster
+#     Autoscaler can add capacity in the other zone instead of stacking for convenience.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,10 +16,13 @@ metadata:
 spec:
   template:
     spec:
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchLabels:
-                  app.kubernetes.io/name: mongodb-mongos
-              topologyKey: topology.kubernetes.io/zone
+      topologySpreadConstraints:
+        - maxSkew: 1
+          minDomains: 2
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: mongodb-mongos
+          matchLabelKeys:
+            - pod-template-hash
