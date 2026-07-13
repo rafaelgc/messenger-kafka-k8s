@@ -28,6 +28,8 @@ patches:
       labelSelector: scheduling.messenger/spot=true
   - path: public-api-az-spread-patch.yaml
   - path: message-storage-az-spread-patch.yaml
+  - path: chat-az-spread-patch.yaml
+  - path: users-az-spread-patch.yaml
   - path: otel-collector-spot-patch.yaml
 
 # Rule order matches base/ingress.yaml: app, api, ws, kafka, mongo.
