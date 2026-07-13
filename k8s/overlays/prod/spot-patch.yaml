@@ -1,8 +1,9 @@
 # EKS spot node group: toleration passes the taint; required affinity keeps pods off on-demand.
+# Applied to Deployments labeled scheduling.messenger/spot=true (see kustomization.yaml).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: public-api-deployment
+  name: not-used
 spec:
   template:
     spec:
