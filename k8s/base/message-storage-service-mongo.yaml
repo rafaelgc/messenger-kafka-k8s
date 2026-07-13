@@ -350,6 +350,8 @@ kind: Deployment
 metadata:
   name: mongodb-mongos
   namespace: mongodb-operator
+  labels:
+    scheduling.messenger/spot: "true"
 spec:
   replicas: 3
   selector:

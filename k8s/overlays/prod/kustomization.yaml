@@ -32,6 +32,7 @@ patches:
   - path: users-az-spread-patch.yaml
   - path: message-delivery-az-spread-patch.yaml
   - path: frontend-az-spread-patch.yaml
+  - path: mongodb-mongos-az-spread-patch.yaml
   - path: otel-collector-spot-patch.yaml
 
 # Rule order matches base/ingress.yaml: app, api, ws, kafka, mongo.

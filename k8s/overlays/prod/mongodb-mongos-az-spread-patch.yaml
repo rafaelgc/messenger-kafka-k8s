@@ -1,0 +1,16 @@
+# Spread mongos routers across AZs; spot scheduling comes from scheduling.messenger/spot label + spot-patch.yaml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-mongos
+  namespace: mongodb-operator
+spec:
+  template:
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: mongodb-mongos
+              topologyKey: topology.kubernetes.io/zone
