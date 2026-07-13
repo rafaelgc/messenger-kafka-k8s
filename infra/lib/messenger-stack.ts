@@ -43,11 +43,11 @@ export class MessengerStack extends cdk.Stack {
     cluster.addNodegroupCapacity('MessengerNodegroup', {
       ...nodegroupCommon,
       instanceTypes: [new InstanceType('t4g.large')],
-      minSize: 1,
+      minSize: 2,
       maxSize: 6,
       capacityType: CapacityType.ON_DEMAND,
     });
-
+    
     // Stateless app tiers (public-api first; more services migrate here gradually).
     // Taint keeps spot nodes exclusive to workloads that opt in via toleration + affinity.
     cluster.addNodegroupCapacity('MessengerSpotNodegroup', {
@@ -58,7 +58,7 @@ export class MessengerStack extends cdk.Stack {
         new InstanceType('m7g.large'),
         new InstanceType('m6g.large'),
       ],
-      minSize: 0,
+      minSize: 2,
       maxSize: 4,
       capacityType: CapacityType.SPOT,
       taints: [
@@ -150,7 +150,7 @@ export class MessengerStack extends cdk.Stack {
       namespace: 'kube-system',
       release: 'cluster-autoscaler',
       // Chart 9.46.6 ships cluster-autoscaler v1.32.0 (match KubernetesVersion.V1_32).
-      version: '9.46.6',
+      version: '9.46.6', // [TODO] Update to latest version, compatible with KubernetesVersion.V1_35.
       createNamespace: false,
       wait: true,
       timeout: cdk.Duration.minutes(5),
