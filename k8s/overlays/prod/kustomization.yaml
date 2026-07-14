@@ -1,6 +1,7 @@
 # EKS production with AWS Load Balancer Controller (ALB).
 #
-# Requires the ALB controller (installed by CDK in messenger-stack.ts).
+# Requires the ALB controller and spot/on-demand node groups (infra/lib/messenger-stack.ts).
+# Deploy CDK before applying manifests so spot nodes exist for spot-scheduled workloads.
 #
 # Apply:
 #   kubectl apply -k k8s/overlays/prod
@@ -21,6 +22,18 @@ patches:
   - path: ingress-patch.yaml
   - path: grafana-ingress-patch.yaml
   - path: public-api-otel-patch.yaml
+  - path: spot-patch.yaml
+    target:
+      kind: Deployment
+      labelSelector: scheduling.messenger/spot=true
+  - path: public-api-az-spread-patch.yaml
+  - path: message-storage-az-spread-patch.yaml
+  - path: chat-az-spread-patch.yaml
+  - path: users-az-spread-patch.yaml
+  - path: message-delivery-az-spread-patch.yaml
+  - path: frontend-az-spread-patch.yaml
+  - path: mongodb-mongos-az-spread-patch.yaml
+  - path: otel-collector-spot-patch.yaml
 
 # Rule order matches base/ingress.yaml: app, api, ws, kafka, mongo.
 # Grafana Ingress (observability namespace) hostname is replaced separately below.

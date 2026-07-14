@@ -39,13 +39,6 @@ spec:
         app.kubernetes.io/name: otel-collector
     spec:
       serviceAccountName: otel-collector
-      tolerations:
-        - key: node-role.kubernetes.io/control-plane
-          operator: Exists
-          effect: NoSchedule
-        - key: node-role.kubernetes.io/master
-          operator: Exists
-          effect: NoSchedule
       containers:
         - name: otel-collector
           image: otel/opentelemetry-collector-contrib:0.119.0

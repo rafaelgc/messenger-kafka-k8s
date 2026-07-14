@@ -87,6 +87,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mongo-express-deployment
+  labels:
+    scheduling.messenger/spot: "true"
 spec:
   replicas: 1
   # Recreate avoids two pods during rollout; subPath ConfigMap mounts do not hot-reload.

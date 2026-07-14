@@ -16,6 +16,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: message-delivery-deployment
+  labels:
+    scheduling.messenger/spot: "true"
 spec:
   replicas: 2
   selector:
@@ -36,8 +38,12 @@ spec:
               value: info
             - name: KAFKA_BROKERS
               value: kafka:9092
+            # One consumer group per pod so every replica reads all message.sent events and
+            # delivers only to WebSocket connections on this pod (shared group would split partitions).
             - name: KAFKA_CONSUMER_GROUP
-              value: message-delivery
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: DELIVERY_BIND_ADDR
               value: 0.0.0.0:8081
             - name: JWT_SECRET

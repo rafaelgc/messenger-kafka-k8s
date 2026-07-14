@@ -1,0 +1,15 @@
+# Spread replicas across AZs so a single zone outage does not take out all pods.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: message-storage-deployment
+spec:
+  template:
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: message-storage
+              topologyKey: topology.kubernetes.io/zone

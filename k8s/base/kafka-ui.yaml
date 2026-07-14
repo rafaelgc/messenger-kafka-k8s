@@ -16,6 +16,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kafka-ui-deployment
+  labels:
+    scheduling.messenger/spot: "true"
 spec:
   replicas: 1
   selector:

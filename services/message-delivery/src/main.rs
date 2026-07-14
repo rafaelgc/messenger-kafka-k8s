@@ -269,6 +269,8 @@ async fn run_kafka_consumer(state: AppState) -> Result<(), String> {
 
 fn create_consumer() -> StreamConsumer {
     let brokers = std::env::var("KAFKA_BROKERS").expect("KAFKA_BROKERS must be set");
+    // Per-pod group id (K8s sets KAFKA_CONSUMER_GROUP=pod name) so each replica consumes every
+    // event and fans out only to local WebSocket connections. Local/docker uses a fixed group.
     let group_id =
         std::env::var("KAFKA_CONSUMER_GROUP").unwrap_or_else(|_| "message-delivery".into());
 

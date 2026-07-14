@@ -25,6 +25,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: message-storage-deployment
+  labels:
+    scheduling.messenger/spot: "true"
 spec:
   replicas: 2
   selector:

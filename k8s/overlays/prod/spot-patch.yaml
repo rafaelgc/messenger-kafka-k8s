@@ -1,0 +1,23 @@
+# EKS spot node group: toleration passes the taint; required affinity keeps pods off on-demand.
+# Applied to Deployments labeled scheduling.messenger/spot=true (see kustomization.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: not-used
+spec:
+  template:
+    spec:
+      tolerations:
+        - key: capacity-type
+          operator: Equal
+          value: spot
+          effect: NoSchedule
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: eks.amazonaws.com/capacityType
+                    operator: In
+                    values:
+                      - SPOT
