@@ -10,4 +10,11 @@ rdkafka = { version = "0.37", features = ["tokio", "cmake-build"] }
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-mongodb = "3.2"
+mongodb = { version = "3.2", features = ["opentelemetry"] }
+tower-http = { version = "0.6", features = ["trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-opentelemetry = "0.33"
+opentelemetry = { version = "0.32", features = ["trace"] }
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "trace"] }
+opentelemetry-otlp = { version = "0.32", features = ["grpc-tonic", "trace"] }

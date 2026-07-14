@@ -573,6 +573,8 @@ async fn send_message(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
+    // [TODO][TRACING] Inject W3C traceparent into Kafka message headers (and wrap publish
+    // in a kafka.publish span) so message-storage consume spans link as parent-child.
     state
         .producer
         .send(

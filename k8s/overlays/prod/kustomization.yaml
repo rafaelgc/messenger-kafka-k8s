@@ -22,6 +22,7 @@ patches:
   - path: ingress-patch.yaml
   - path: grafana-ingress-patch.yaml
   - path: public-api-otel-patch.yaml
+  - path: message-storage-otel-patch.yaml
   - path: spot-patch.yaml
     target:
       kind: Deployment
