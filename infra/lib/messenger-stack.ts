@@ -84,7 +84,14 @@ export class MessengerStack extends cdk.Stack {
     this.addClusterAutoscaler(cluster);
   }
 
-  /** Map IAM users to cluster admin via the aws-auth ConfigMap. */
+  /**
+   * Kubernetes access for operators (kubectl, EKS console Resources tab).
+   * Maps IAM users from cdk.context.json to system:masters in aws-auth.
+   *
+   * This is not CDK deploy permission: cdk deploy uses ~/.aws credentials and needs
+   * separate broad IAM (EKS, EC2, CloudFormation, …). Listed users also need AWS-side
+   * EKS IAM (e.g. eks:AccessKubernetesApi) — see root README Step 2.
+   */
   private addEksAccessMappings(cluster: Cluster, messenger: MessengerContext): void {
     for (const [index, arn] of messenger.eksAdminUserArns.entries()) {
       cluster.awsAuth.addUserMapping(
@@ -97,6 +104,8 @@ export class MessengerStack extends cdk.Stack {
   /**
    * Cluster Autoscaler: IRSA (kube-system/cluster-autoscaler) + Helm release.
    * EKS tags the managed node group's ASG for auto-discovery on create.
+   * 
+   * The purpose of this is to start with few nodes and scale up as needed.
    */
   private addClusterAutoscaler(cluster: Cluster): void {
     const clusterAutoscaler = cluster.addServiceAccount('ClusterAutoscaler', {

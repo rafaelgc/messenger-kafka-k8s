@@ -116,7 +116,7 @@ docker run --rm cdk-cli --version
 
 #### Step 2. Configure CDK context (EKS admin access)
 
-The stack maps IAM users to Kubernetes (`system:masters`) so `kubectl` and the EKS console work. Those ARNs are **not** hardcoded — they live in `infra/cdk.context.json` (gitignored, per account).
+The stack maps IAM users to Kubernetes (`system:masters`) via the cluster `aws-auth` ConfigMap so `kubectl` and the EKS console can call the Kubernetes API. Those ARNs are **not** hardcoded — they live in `infra/cdk.context.json` (gitignored, per account).
 
 On first deploy, copy the example and edit if needed:
 
@@ -138,9 +138,46 @@ The file lists IAM users allowed to administer the cluster:
 
 CDK reads this file automatically when you run `cdk diff` / `cdk deploy` from `infra/`.
 
-Use the same IAM user for `aws eks update-kubeconfig` and the AWS console as one of the mapped users — the root user is not mapped unless you add its ARN explicitly.
+**Requirements for each listed IAM user**
 
-See `infra/README.md` for details.
+Two layers apply: **AWS IAM permissions** (who may talk to the EKS control plane) and **Kubernetes mapping** (what they may do inside the cluster). CDK only configures the second; you must attach IAM policies in the AWS account yourself.
+
+| Layer | What it does | How it is configured |
+|-------|----------------|----------------------|
+| **Kubernetes** | Full cluster admin (`kubectl`, EKS Resources tab) | CDK: `system:masters` in `aws-auth` for each ARN in `eksAdminUserArns` |
+| **AWS IAM** | Allows `aws eks update-kubeconfig`, EKS console, and Kubernetes API calls | Attach to the IAM **user** in IAM (console or IaC) |
+
+**Minimum IAM permissions** for cluster access (replace `*` with your cluster ARN after deploy if you prefer least privilege):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "eks:DescribeCluster",
+        "eks:ListClusters",
+        "eks:AccessKubernetesApi"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+Alternatively, attach the AWS managed policy **`AmazonEKSClusterAdminPolicy`** scoped to your cluster (same intent, less custom JSON).
+
+**Using the cluster**
+
+- Configure `kubectl` with the **same IAM user** as in `cdk.context.json` (credentials in `~/.aws` that resolve to that user).
+- The **root** account user is not mapped unless you add `arn:aws:iam::ACCOUNT:root` to `eksAdminUserArns` (not recommended).
+
+**CDK deploy is separate**
+
+Running `cdk deploy` / `cdk destroy` uses whatever credentials are mounted from `~/.aws` and needs **broader IAM rights** (EKS, EC2, IAM, CloudFormation, etc.) to create the cluster and node groups. That is often the same human operator as `rafa-cli`, but it is a different permission set from day-to-day `kubectl` access. A user listed only for cluster admin cannot deploy infrastructure unless they also have deploy permissions.
+
+See `infra/README.md` for CDK context details.
 
 #### Step 3. Preview infrastructure changes (`cdk diff`)
 

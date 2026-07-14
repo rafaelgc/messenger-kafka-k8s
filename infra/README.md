@@ -26,6 +26,8 @@ IAM users allowed to administer the cluster are **not** hardcoded in the stack. 
 
    Kubernetes username is derived from the last segment of each ARN (`rafa-cli`). All listed users are mapped to `system:masters`.
 
+   Each user also needs **IAM permissions** on the AWS side (`eks:DescribeCluster`, `eks:ListClusters`, `eks:AccessKubernetesApi`, or managed policy `AmazonEKSClusterAdminPolicy`). CDK does not attach those — see the root [README](../README.md) (Step 2, *Requirements for each listed IAM user*).
+
 `cdk.context.json` is gitignored. CDK loads it automatically next to `cdk.json`.
 
 ## Useful commands
