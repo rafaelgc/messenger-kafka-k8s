@@ -13,11 +13,18 @@ import { KubectlV35Layer } from '@aws-cdk/lambda-layer-kubectl-v35';
 import { InstanceType } from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { User } from 'aws-cdk-lib/aws-iam';
+import {
+  iamUserNameFromArn,
+  MessengerContext,
+} from './messenger-config';
 
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
+export interface MessengerStackProps extends cdk.StackProps {
+  /** From CDK context (cdk.context.json); see cdk.context.example.json. */
+  readonly messenger: MessengerContext;
+}
 
 export class MessengerStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: MessengerStackProps) {
     super(scope, id, props);
 
     const cluster = new Cluster(this, 'MessengerCluster', {
@@ -71,17 +78,20 @@ export class MessengerStack extends cdk.Stack {
       ],
     });
 
-    cluster.awsAuth.addUserMapping(
-      User.fromUserArn(
-        this,
-        'RafaCli',
-        'arn:aws:iam::906876370565:user/rafa-cli', // [TODO] Do not hardcode.
-      ),
-      { username: 'rafa-cli', groups: ['system:masters'] },
-    );
+    this.addEksAccessMappings(cluster, props.messenger);
 
     this.addEbsCsiDriverWithDefaultStorageClass(cluster);
     this.addClusterAutoscaler(cluster);
+  }
+
+  /** Map IAM users to cluster admin via the aws-auth ConfigMap. */
+  private addEksAccessMappings(cluster: Cluster, messenger: MessengerContext): void {
+    for (const [index, arn] of messenger.eksAdminUserArns.entries()) {
+      cluster.awsAuth.addUserMapping(
+        User.fromUserArn(this, `EksAdminUser${index}`, arn),
+        { username: iamUserNameFromArn(arn), groups: ['system:masters'] },
+      );
+    }
   }
 
   /**

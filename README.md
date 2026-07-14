@@ -114,7 +114,35 @@ Verify:
 docker run --rm cdk-cli --version
 ```
 
-#### Step 2. Preview infrastructure changes (`cdk diff`)
+#### Step 2. Configure CDK context (EKS admin access)
+
+The stack maps IAM users to Kubernetes (`system:masters`) so `kubectl` and the EKS console work. Those ARNs are **not** hardcoded — they live in `infra/cdk.context.json` (gitignored, per account).
+
+On first deploy, copy the example and edit if needed:
+
+```bash
+cp infra/cdk.context.example.json infra/cdk.context.json
+```
+
+The file lists IAM users allowed to administer the cluster:
+
+```json
+{
+  "messenger": {
+    "eksAdminUserArns": [
+      "arn:aws:iam::906876370565:user/rafa-cli"
+    ]
+  }
+}
+```
+
+CDK reads this file automatically when you run `cdk diff` / `cdk deploy` from `infra/`.
+
+Use the same IAM user for `aws eks update-kubeconfig` and the AWS console as one of the mapped users — the root user is not mapped unless you add its ARN explicitly.
+
+See `infra/README.md` for details.
+
+#### Step 3. Preview infrastructure changes (`cdk diff`)
 
 ```bash
 docker run --rm \
@@ -143,7 +171,7 @@ aws eks update-kubeconfig --name <cluster-name> --region <region>
 
 CDK also installs the **Amazon EBS CSI driver** addon and a default **`gp3` StorageClass** so PersistentVolumeClaims can provision EBS volumes.
 
-#### Step 3. Build and push images to ECR
+#### Step 4. Build and push images to ECR
 
 EKS nodes pull application images from Amazon ECR. Build every service image and push it:
 
@@ -155,7 +183,7 @@ Requires AWS credentials and a configured region (`AWS_REGION` or `aws configure
 
 For the frontend, URLs are read from `frontend/.env.prod` (edit that file for your domains). EKS nodes are ARM64 (`t4g.large`); images built on Apple Silicon match that architecture automatically.
 
-#### Step 4. Configure the prod overlay
+#### Step 5. Configure the prod overlay
 
 Before `kubectl apply`, point manifests at ECR and set your hostnames:
 
@@ -167,7 +195,7 @@ This rewrites `k8s/overlays/prod/ecr/kustomization.yaml` with your registry host
 
 Edit production hostnames in `k8s/overlays/prod/hosts-configmap.yaml`.
 
-#### Step 5. Install cluster add-ons
+#### Step 6. Install cluster add-ons
 
 Install the MongoDB Community Operator once (skip ingress-nginx on EKS — the ALB controller is installed by CDK):
 
@@ -177,7 +205,7 @@ Install the MongoDB Community Operator once (skip ingress-nginx on EKS — the A
 
 The operator must be running before you apply manifests that create `MongoDBCommunity` resources.
 
-#### Step 6. Deploy the application (`kubectl apply`)
+#### Step 7. Deploy the application (`kubectl apply`)
 
 ```bash
 kubectl apply -k k8s/overlays/prod

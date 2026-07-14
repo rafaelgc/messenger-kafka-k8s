@@ -1,8 +1,32 @@
-# Welcome to your CDK TypeScript project
-
-This is a blank project for CDK development with TypeScript.
+# Messenger CDK (EKS)
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
+
+## Account-specific config (EKS admin access)
+
+IAM users allowed to administer the cluster are **not** hardcoded in the stack. They live in CDK **context**:
+
+1. Copy the example file:
+
+   ```bash
+   cp cdk.context.example.json cdk.context.json
+   ```
+
+2. Edit `cdk.context.json` and set your IAM user ARNs:
+
+   ```json
+   {
+     "messenger": {
+       "eksAdminUserArns": [
+         "arn:aws:iam::906876370565:user/rafa-cli"
+       ]
+     }
+   }
+   ```
+
+   Kubernetes username is derived from the last segment of each ARN (`rafa-cli`). All listed users are mapped to `system:masters`.
+
+`cdk.context.json` is gitignored. CDK loads it automatically next to `cdk.json`.
 
 ## Useful commands
 

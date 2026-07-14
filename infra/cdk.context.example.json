@@ -1,0 +1,7 @@
+{
+  "messenger": {
+    "eksAdminUserArns": [
+      "arn:aws:iam::123456789012:user/your-cli-user"
+    ]
+  }
+}
