@@ -74,6 +74,8 @@ async fn shutdown_signal() {
 }
 
 async fn run_http_server(state: AppState) -> Result<(), String> {
+    // [TODO] Add GET /health (200 OK) for ALB/Kubernetes health checks; point the ingress
+    // healthcheck-path annotation at /health instead of relying on GET /.
     let app = messages::router()
         .with_state(state)
         .layer(telemetry::http_trace_layer());

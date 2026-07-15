@@ -213,6 +213,8 @@ async fn main() {
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers([AUTHORIZATION, axum::http::header::CONTENT_TYPE]);
 
+    // [TODO] Add GET /health (200 OK) for ALB/Kubernetes health checks; point the ingress
+    // healthcheck-path annotation at /health instead of relying on GET /.
     let app = Router::new()
         .route("/", get(home))
         .route("/users", post(create_user))

@@ -80,6 +80,8 @@ async fn main() {
         jwt_secret,
     };
 
+    // [TODO] Add GET /health (200 OK) for ALB/Kubernetes health checks; point the ingress
+    // healthcheck-path annotation at /health instead of relying on GET /.
     let app = Router::new()
         .route("/users", get(get_user).post(create_user))
         .route("/authentications", post(authenticate))

@@ -22,6 +22,7 @@ use std::sync::{
 };
 use tokio::sync::mpsc;
 
+mod telemetry;
 mod topics;
 
 /// Outbound messages to a connected client are sent through this channel.
@@ -67,6 +68,8 @@ struct TokenClaims {
 
 #[tokio::main]
 async fn main() {
+    let telemetry = telemetry::TelemetryGuard::init();
+
     let jwt_secret = std::env::var("JWT_SECRET")
         .unwrap_or_else(|_| "dev-jwt-secret-change-in-production".into());
     let pod_name = std::env::var("POD_NAME").unwrap_or_else(|_| "unknown".into());
@@ -78,8 +81,8 @@ async fn main() {
     };
 
     tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            println!("shutdown signal received");
+        _ = shutdown_signal() => {
+            tracing::info!("shutdown signal received");
         }
         result = run_websocket_server(state.clone()) => {
             if let Err(error) = result {
@@ -92,21 +95,50 @@ async fn main() {
             }
         }
     }
+
+    telemetry.shutdown();
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to listen for ctrl-c");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to listen for SIGTERM")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }
 
 async fn run_websocket_server(state: AppState) -> Result<(), String> {
     let bind_addr =
         std::env::var("DELIVERY_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8081".into());
 
+    // [TODO] Add GET /health (200 OK) for ALB/Kubernetes health checks; point the ingress
+    // healthcheck-path annotation at /health instead of relying on GET /.
     let app = Router::new()
         .route("/ws", get(ws_handler))
-        .with_state(state);
+        .with_state(state)
+        .layer(telemetry::http_trace_layer());
 
     let listener = tokio::net::TcpListener::bind(&bind_addr)
         .await
         .map_err(|error| format!("failed to bind websocket server: {error}"))?;
 
-    println!("websocket server listening on {bind_addr}");
+    tracing::info!("websocket server listening on {bind_addr}");
 
     axum::serve(listener, app)
         .await
@@ -243,7 +275,7 @@ async fn run_kafka_consumer(state: AppState) -> Result<(), String> {
         .subscribe(&[topics::MESSAGE_SENT])
         .map_err(|error| format!("failed to subscribe to message.sent topic: {error}"))?;
 
-    println!(
+    tracing::info!(
         "message-delivery listening on topic '{}' as group '{}'",
         topics::MESSAGE_SENT,
         std::env::var("KAFKA_CONSUMER_GROUP").unwrap_or_else(|_| "message-delivery".into())
@@ -255,11 +287,11 @@ async fn run_kafka_consumer(state: AppState) -> Result<(), String> {
         match maybe_message {
             Ok(message) => {
                 if let Err(error) = handle_kafka_message(&message, &state) {
-                    eprintln!("failed to handle message: {error}");
+                    tracing::error!(error = %error, "failed to handle kafka message");
                 }
             }
             Err(error) => {
-                eprintln!("kafka consumer error: {error}");
+                tracing::error!(error = %error, "kafka consumer error");
             }
         }
     }
@@ -284,6 +316,24 @@ fn create_consumer() -> StreamConsumer {
 }
 
 fn handle_kafka_message(message: &impl Message, state: &AppState) -> Result<(), String> {
+    let partition = message.partition();
+    let offset = message.offset();
+
+    // [TODO][TRACING] Extract W3C traceparent from Kafka message headers and set_parent
+    // on the consume span so it links to the public-api kafka.publish span.
+    let span = tracing::info_span!(
+        "kafka.consume",
+        otel.name = "message.sent deliver",
+        messaging.system = "kafka",
+        messaging.destination = topics::MESSAGE_SENT,
+        messaging.operation = "process",
+        messaging.kafka.partition = partition,
+        messaging.kafka.offset = offset,
+        messaging.chat_id = tracing::field::Empty,
+        messaging.delivered_count = tracing::field::Empty,
+    );
+    let _guard = span.enter();
+
     let payload = message
         .payload()
         .ok_or_else(|| "message has no payload".to_string())?;
@@ -291,25 +341,21 @@ fn handle_kafka_message(message: &impl Message, state: &AppState) -> Result<(), 
     let event: MessageSentEvent = serde_json::from_slice(payload)
         .map_err(|error| format!("invalid message.sent payload: {error}"))?;
 
-    println!(
-        "pod={} received message.sent: chat_id={}, sender_id={}, text={}, recipients={}",
-        state.pod_name,
-        event.chat_id,
-        event.sender_id,
-        event.text,
-        event.recipient_ids.len()
-    );
+    span.record("messaging.chat_id", event.chat_id.as_str());
 
     let outbound = serde_json::to_string(&event)
         .map_err(|error| format!("failed to serialize outbound message: {error}"))?;
 
     let delivered_to = deliver_to_recipients(state, &event.recipient_ids, &outbound);
+    span.record("messaging.delivered_count", delivered_to as i64);
 
-    println!(
-        "pod={} delivered message.sent to {delivered_to} connected recipient(s) (chat_id={}, {} recipient(s) in event)",
-        state.pod_name,
-        event.chat_id,
-        event.recipient_ids.len()
+    tracing::debug!(
+        pod = %state.pod_name,
+        chat_id = %event.chat_id,
+        sender_id = %event.sender_id,
+        delivered_to,
+        recipient_count = event.recipient_ids.len(),
+        "delivered message.sent to connected recipients"
     );
 
     Ok(())

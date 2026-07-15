@@ -33,6 +33,8 @@ async fn main() {
 
     let state = AppState { collection };
 
+    // [TODO] Add GET /health (200 OK) for ALB/Kubernetes health checks; point the ingress
+    // healthcheck-path annotation at /health instead of relying on GET /.
     let app = chats::router().with_state(state);
 
     let bind_addr = std::env::var("CHAT_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8085".into());
