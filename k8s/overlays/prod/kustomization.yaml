@@ -24,6 +24,8 @@ patches:
   - path: public-api-otel-patch.yaml
   - path: message-storage-otel-patch.yaml
   - path: message-delivery-otel-patch.yaml
+  - path: chat-otel-patch.yaml
+  - path: users-otel-patch.yaml
   - path: spot-patch.yaml
     target:
       kind: Deployment

@@ -119,3 +119,16 @@ spec:
               value: 0.0.0.0:8088
             - name: JWT_SECRET
               value: dev-jwt-secret-change-in-production
+            - name: OTEL_SERVICE_NAME
+              value: users
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.observability.svc.cluster.local:4317
+            # Local/dev default; prod overlay patches deployment.environment=prod.
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: deployment.environment=local
+            - name: OTEL_TRACES_SAMPLER
+              value: parentbased_traceidratio
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "1.0"
+            - name: OTEL_RUST_INSTRUMENTATION_MONGODB_ENABLED
+              value: "true"

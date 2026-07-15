@@ -1,3 +1,5 @@
+mod telemetry;
+
 use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
@@ -71,6 +73,8 @@ struct GetUserQuery {
 
 #[tokio::main]
 async fn main() {
+    let telemetry = telemetry::TelemetryGuard::init();
+
     let jwt_secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
     let collection = create_collection().await;
     ensure_nickname_index(&collection).await;
@@ -85,14 +89,44 @@ async fn main() {
     let app = Router::new()
         .route("/users", get(get_user).post(create_user))
         .route("/authentications", post(authenticate))
-        .with_state(state);
+        .with_state(state)
+        .layer(telemetry::http_trace_layer());
 
     let bind_addr = std::env::var("USERS_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8088".into());
     let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
 
-    println!("users service listening on {bind_addr}");
+    tracing::info!("users service listening on {bind_addr}");
 
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .unwrap();
+
+    telemetry.shutdown();
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to listen for ctrl-c");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to listen for SIGTERM")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }
 
 async fn create_collection() -> Collection<UserDocument> {

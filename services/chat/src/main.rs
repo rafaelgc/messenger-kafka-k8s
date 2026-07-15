@@ -1,4 +1,5 @@
 mod chats;
+mod telemetry;
 
 use mongodb::bson::{doc, oid::ObjectId};
 use mongodb::{Collection, IndexModel};
@@ -28,6 +29,8 @@ pub(crate) struct StoredChat {
 
 #[tokio::main]
 async fn main() {
+    let telemetry = telemetry::TelemetryGuard::init();
+
     let collection = create_collection().await;
     ensure_members_index(&collection).await;
 
@@ -35,14 +38,45 @@ async fn main() {
 
     // [TODO] Add GET /health (200 OK) for ALB/Kubernetes health checks; point the ingress
     // healthcheck-path annotation at /health instead of relying on GET /.
-    let app = chats::router().with_state(state);
+    let app = chats::router()
+        .with_state(state)
+        .layer(telemetry::http_trace_layer());
 
     let bind_addr = std::env::var("CHAT_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8085".into());
     let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
 
-    println!("chat service listening on {bind_addr}");
+    tracing::info!("chat service listening on {bind_addr}");
 
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .unwrap();
+
+    telemetry.shutdown();
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to listen for ctrl-c");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to listen for SIGTERM")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }
 
 async fn create_collection() -> Collection<StoredChat> {
