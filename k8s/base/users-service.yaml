@@ -28,7 +28,7 @@ kind: Deployment
 metadata:
   name: users-mongodb
 spec:
-  replicas: 2
+  replicas: 1 # [TODO] Use MongoDBCommunity with proper replication.
   selector:
     matchLabels:
       app.kubernetes.io/name: users-mongodb
