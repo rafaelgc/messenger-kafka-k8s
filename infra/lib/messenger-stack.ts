@@ -168,8 +168,7 @@ export class MessengerStack extends cdk.Stack {
       repository: 'https://kubernetes.github.io/autoscaler',
       namespace: 'kube-system',
       release: 'cluster-autoscaler',
-      // Chart 9.46.6 ships cluster-autoscaler v1.32.0 (match KubernetesVersion.V1_32).
-      version: '9.46.6', // [TODO] Update to latest version, compatible with KubernetesVersion.V1_35.
+      version: '9.58.0',
       createNamespace: false,
       wait: true,
       timeout: cdk.Duration.minutes(5),
