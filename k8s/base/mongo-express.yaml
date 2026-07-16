@@ -19,7 +19,7 @@ data:
           blacklist: [],
         },
         {
-          connectionString: 'mongodb://chat-mongodb:27017',
+          connectionString: 'mongodb://admin:admin123@chat-mongodb-svc.mongodb-operator.svc.cluster.local:27017/chat?replicaSet=chat-mongodb&authSource=admin',
           connectionName: 'chat',
           admin: true,
           connectionOptions: { maxPoolSize: 4 },
@@ -27,7 +27,7 @@ data:
           blacklist: [],
         },
         {
-          connectionString: 'mongodb://users-mongodb:27017',
+          connectionString: 'mongodb://admin:admin123@users-mongodb-svc.mongodb-operator.svc.cluster.local:27017/users?replicaSet=users-mongodb&authSource=admin',
           connectionName: 'users',
           admin: true,
           connectionOptions: { maxPoolSize: 4 },

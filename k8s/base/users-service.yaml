@@ -1,78 +1,66 @@
----
-# Users MongoDB
 apiVersion: v1
-kind: PersistentVolumeClaim
+kind: Secret
 metadata:
-  name: users-mongodb-data
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
+  name: users-mongodb-password
+  namespace: mongodb-operator
+type: Opaque
+stringData:
+  password: admin123 # [SECURITY][TODO] Production-grade: use ExternalSecrets.
 ---
 apiVersion: v1
-kind: Service
+kind: Secret
 metadata:
-  name: users-mongodb
-spec:
-  selector:
-    app.kubernetes.io/name: users-mongodb
-  ports:
-    - protocol: TCP
-      port: 27017
-      targetPort: 27017
+  name: users-mongodb-uri
+type: Opaque
+stringData:
+  uri: mongodb://admin:admin123@users-mongodb-svc.mongodb-operator.svc.cluster.local:27017/users?replicaSet=users-mongodb&authSource=admin
 ---
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: mongodbcommunity.mongodb.com/v1
+kind: MongoDBCommunity
 metadata:
   name: users-mongodb
+  namespace: mongodb-operator
 spec:
-  replicas: 1 # [TODO] Use MongoDBCommunity with proper replication.
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: users-mongodb
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: users-mongodb
+  members: 2
+  type: ReplicaSet
+  version: "8.0.0"
+  users:
+    - name: admin
+      db: admin
+      passwordSecretRef:
+        name: users-mongodb-password
+      roles:
+        - name: root
+          db: admin
+      scramCredentialsSecretName: users-mongodb-scram
+  security:
+    authentication:
+      modes:
+        - SCRAM
+  # Defaults are 500m+500m (=1 CPU/pod), which leaves ~700m free on a t4g.large
+  # that already hosts another Mongo member — not enough for a second default pod.
+  # These requests let users-mongodb pack beside an existing member (~500m total).
+  statefulSet:
     spec:
-      containers:
-        - name: mongodb
-          image: mongo:7
-          ports:
-            - containerPort: 27017
-          env:
-            - name: MONGO_INITDB_DATABASE
-              value: users
-          volumeMounts:
-            - name: data
-              mountPath: /data/db
-          readinessProbe:
-            exec:
-              command:
-                - mongosh
-                - --quiet
-                - --eval
-                - "db.adminCommand('ping').ok"
-            initialDelaySeconds: 20
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 10
-          livenessProbe:
-            exec:
-              command:
-                - mongosh
-                - --quiet
-                - --eval
-                - "db.adminCommand('ping').ok"
-            initialDelaySeconds: 30
-            periodSeconds: 30
-            timeoutSeconds: 5
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: users-mongodb-data
+      template:
+        spec:
+          containers:
+            - name: mongod
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 400M
+                limits:
+                  cpu: "1"
+                  memory: 500M
+            - name: mongodb-agent
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 400M
+                limits:
+                  cpu: "1"
+                  memory: 500M
 ---
 # Users Service
 apiVersion: v1
@@ -112,7 +100,10 @@ spec:
             - name: RUST_LOG
               value: info
             - name: MONGODB_URI
-              value: mongodb://users-mongodb:27017
+              valueFrom:
+                secretKeyRef:
+                  name: users-mongodb-uri
+                  key: uri
             - name: MONGODB_DATABASE
               value: users
             - name: USERS_BIND_ADDR
