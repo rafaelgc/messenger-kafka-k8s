@@ -30,6 +30,28 @@ IAM users allowed to administer the cluster are **not** hardcoded in the stack. 
 
 `cdk.context.json` is gitignored. CDK loads it automatically next to `cdk.json`.
 
+## Load test Lambda
+
+`MessengerLoadTestStack` packages `scripts/load-test/simulate-user.mjs` as a Node.js 20 (arm64) Lambda.
+
+Deploy only that stack:
+
+```bash
+npx cdk deploy MessengerLoadTestStack
+```
+
+Invoke one virtual user:
+
+```bash
+aws lambda invoke \
+  --function-name messenger-load-test-simulate-user \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"uid":0,"users":10,"startAt":"2026-07-16T20:00:00Z"}' \
+  /tmp/out.json && cat /tmp/out.json
+```
+
+Default env: `API_BASE_URL=http://api.messenger.rgonzalez.xyz`, timeout 15 minutes (covers `startAt` hold).
+
 ## Useful commands
 
 * `npm run build`   compile typescript to js
