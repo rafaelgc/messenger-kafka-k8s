@@ -7,6 +7,7 @@ use futures::TryStreamExt;
 use mongodb::bson::{doc, oid::ObjectId};
 use mongodb::options::FindOptions;
 use serde::{Deserialize, Serialize};
+use tracing::Instrument;
 
 use crate::{AppState, StoredMessage};
 
@@ -63,23 +64,55 @@ pub(crate) async fn list_messages(
         .limit(fetch_limit)
         .build();
 
-    let cursor = state
-        .collection
-        .find(filter)
-        .with_options(options)
-        .await
-        .map_err(|error| {
-            eprintln!("failed to query messages for chat_id={chat_id}: {error}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    // Span covers find + cursor collect so Tempo shows Mongo wait vs HTTP overhead.
+    let mut messages = async {
+        let result = async {
+            let cursor = state
+                .collection
+                .find(filter)
+                .with_options(options)
+                .await
+                .map_err(|error| {
+                    eprintln!("failed to query messages for chat_id={chat_id}: {error}");
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
 
-    let mut messages = cursor
-        .try_collect::<Vec<StoredMessage>>()
-        .await
-        .map_err(|error| {
-            eprintln!("failed to read messages for chat_id={chat_id}: {error}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+            cursor
+                .try_collect::<Vec<StoredMessage>>()
+                .await
+                .map_err(|error| {
+                    eprintln!("failed to read messages for chat_id={chat_id}: {error}");
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })
+        }
+        .await;
+
+        let span = tracing::Span::current();
+        match &result {
+            Ok(rows) => {
+                span.record("db.query.result_count", rows.len());
+                span.record("otel.status_code", "OK");
+            }
+            Err(_) => {
+                span.record("otel.status_code", "ERROR");
+                span.record("otel.status_description", "mongodb find/collect failed");
+            }
+        }
+        result
+    }
+    .instrument(tracing::info_span!(
+        "db.query",
+        otel.name = "messages.find",
+        otel.status_code = tracing::field::Empty,
+        otel.status_description = tracing::field::Empty,
+        db.system = "mongodb",
+        db.operation = "find",
+        db.mongodb.collection = "messages",
+        messaging.chat_id = %chat_id,
+        db.query.limit = fetch_limit,
+        db.query.result_count = tracing::field::Empty,
+    ))
+    .await?;
 
     let has_more = messages.len() > limit as usize;
     if has_more {

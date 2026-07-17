@@ -105,12 +105,17 @@ pub struct HttpMakeSpan;
 impl<B> tower_http::trace::MakeSpan<B> for HttpMakeSpan {
     fn make_span(&mut self, request: &Request<B>) -> Span {
         let method = request.method().as_str();
-        let path = request.uri().path();
+        // path + query (OTel http.target); path-only hid ?nickname=… in Tempo.
+        let target = request
+            .uri()
+            .path_and_query()
+            .map(|pq| pq.as_str())
+            .unwrap_or_else(|| request.uri().path());
         tracing::info_span!(
             "request",
-            otel.name = %format_args!("{method} {path}"),
+            otel.name = %format_args!("{method} {target}"),
             method = %method,
-            http.target = %path,
+            http.target = %target,
             http.status_code = tracing::field::Empty,
         )
     }
@@ -150,11 +155,17 @@ pub async fn traced_execute(
     use tracing::Instrument;
 
     let request = with_trace_context(builder)?;
+    let url = request.url();
+    let target = match url.query() {
+        Some(query) => format!("{}?{query}", url.path()),
+        None => url.path().to_string(),
+    };
 
     async move { client.execute(request).await }.instrument(tracing::info_span!(
         "http.client",
         otel.name = span_name,
         peer.service = peer,
+        http.target = %target,
     ))
     .await
 }
