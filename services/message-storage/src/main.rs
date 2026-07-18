@@ -3,7 +3,8 @@ mod messages;
 mod telemetry;
 mod topics;
 
-use mongodb::Collection;
+use mongodb::bson::doc;
+use mongodb::{Collection, IndexModel};
 use serde::{Deserialize, Serialize};
 
 const MESSAGES_COLLECTION: &str = "messages";
@@ -26,9 +27,10 @@ pub(crate) struct StoredMessage {
 async fn main() {
     let telemetry = telemetry::TelemetryGuard::init();
 
-    let state = AppState {
-        collection: create_collection().await,
-    };
+    let collection = create_collection().await;
+    ensure_chat_id_id_index(&collection).await;
+
+    let state = AppState { collection };
 
     tokio::select! {
         _ = shutdown_signal() => {
@@ -107,4 +109,15 @@ async fn create_collection() -> Collection<StoredMessage> {
     client
         .database(&database_name)
         .collection(MESSAGES_COLLECTION)
+}
+
+/// Supports list_messages: filter by chat_id, sort by _id descending.
+async fn ensure_chat_id_id_index(collection: &Collection<StoredMessage>) {
+    let index = IndexModel::builder()
+        .keys(doc! { "chat_id": 1, "_id": -1 })
+        .build();
+
+    if let Err(error) = collection.create_index(index).await {
+        eprintln!("failed to ensure chat_id/_id index: {error}");
+    }
 }
