@@ -271,6 +271,16 @@ kubectl apply -k k8s/overlays/prod
 
 (`WaitForFirstConsumer` binding is normal: PVCs stay Pending until a pod that uses them is scheduled.)
 
+#### Step 8. Create Kafka topics
+
+Kafka is configured with `auto.create.topics.enable=false`, so create `message.sent` after the broker is Running (same idea as Compose `kafka-init`):
+
+```bash
+./scripts/create-kafka-topics.sh
+```
+
+This `kubectl exec`s into a Kafka pod and runs `kafka-topics.sh --create --if-not-exists` (2 partitions, replication factor 1 by default). Safe to re-run.
+
 #### Cleaning up (EKS)
 
 Remove workloads from the cluster (reverse of `kubectl apply`):
