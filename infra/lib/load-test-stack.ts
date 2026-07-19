@@ -59,6 +59,7 @@ export class LoadTestStack extends Stack {
         REGISTER_WAIT_MS: String(registerWaitMs),
         SKIP_USER_CREATION: String(skipUserCreation),
       },
+      retryAttempts: 0,
     });
 
     new CfnOutput(this, 'SimulateUserFunctionName', {
