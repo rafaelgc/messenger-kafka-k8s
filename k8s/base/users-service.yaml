@@ -82,7 +82,7 @@ metadata:
   labels:
     scheduling.messenger/spot: "true"
 spec:
-  replicas: 2
+  replicas: 10
   selector:
     matchLabels:
       app.kubernetes.io/name: users
@@ -96,6 +96,15 @@ spec:
           image: users:latest
           ports:
             - containerPort: 8088
+          # Auth is Argon2 (CPU-bound). Requests reserve a real slice so pods cannot
+          # overpack a t4g.large (~2 vCPU); CA can then add Spot nodes when Pending.
+          resources:
+            requests:
+              cpu: 500m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
           env:
             - name: RUST_LOG
               value: info

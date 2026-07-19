@@ -42,6 +42,15 @@ spec:
           image: message-storage:latest
           ports:
             - containerPort: 8087
+          # Kafka consumer + Mongo (I/O-bound). A bit more memory headroom for
+          # client buffers; CPU below users since work is mostly waiting on I/O.
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
           env:
             - name: RUST_LOG
               value: info

@@ -32,6 +32,15 @@ spec:
           image: public-api:latest
           ports:
             - containerPort: 8080
+          # I/O-bound gateway (proxy + JWT). Lighter than users/Argon2; still
+          # reserve CPU so load-test fan-in cannot pack unlimited replicas per node.
+          resources:
+            requests:
+              cpu: 250m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
           env:
             - name: RUST_LOG
               value: info
