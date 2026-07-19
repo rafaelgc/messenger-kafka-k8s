@@ -82,7 +82,7 @@ metadata:
   labels:
     scheduling.messenger/spot: "true"
 spec:
-  replicas: 10
+  replicas: 2 # 8 -> Up to 1000 concurrent users.
   selector:
     matchLabels:
       app.kubernetes.io/name: users

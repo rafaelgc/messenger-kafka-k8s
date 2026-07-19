@@ -69,13 +69,20 @@ spec:
               mountPath: /etc/tempo
             - name: data
               mountPath: /var/tempo
+          # Load tests + OTEL_TRACES_SAMPLER_ARG=1.0 ingest a lot of spans.
+          # Compaction of local Parquet blocks routinely exceeded 512Mi → OOMKilled
+          # → CrashLoopBackOff (often right after "Tempo started" / compacting block).
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
+              cpu: 200m
+              memory: 1Gi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: "1"
+              memory: 2Gi
+          env:
+            # Keep Go heap under the container limit so the kernel OOM-killer is less likely.
+            - name: GOMEMLIMIT
+              value: "1800MiB"
           readinessProbe:
             httpGet:
               path: /ready

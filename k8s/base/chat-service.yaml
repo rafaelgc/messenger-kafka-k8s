@@ -96,6 +96,14 @@ spec:
           image: chat:latest
           ports:
             - containerPort: 8085
+          # HTTP + Mongo (I/O-bound). Same ballpark as public-api; lighter than users/Argon2.
+          resources:
+            requests:
+              cpu: 250m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
           env:
             - name: RUST_LOG
               value: info
