@@ -66,7 +66,9 @@ export class MessengerStack extends cdk.Stack {
         new InstanceType('m6g.large'),
       ],
       minSize: 2,
-      maxSize: 4,
+      // Headroom for CPU-heavy users replicas (500m request) + other Spot apps.
+      // Without this, CA stops at 4 nodes and extra pods stay Pending.
+      maxSize: 8,
       capacityType: CapacityType.SPOT,
       taints: [
         {
