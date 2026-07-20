@@ -1,6 +1,6 @@
 # Messaging Distributed System
 
-A distributed, scalable messaging platform built as a set of Docker services orchestrated with Docker Compose. Services communicate through Kafka event streaming; persistence and push token storage use dedicated MongoDB instances.
+A distributed, scalable messaging platform built as a set of services on **Kubernetes** (local cluster or AWS EKS). Services communicate through Kafka event streaming; persistence and push token storage use dedicated MongoDB instances.
 
 ## Architecture
 
