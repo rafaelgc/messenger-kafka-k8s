@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mimir-config
+data:
+  mimir.yaml: |
+    # Monolithic Mimir (single process). multitenancy off so remote_write /
+    # Grafana do not need X-Scope-OrgID.
+    multitenancy_enabled: false
+
+    server:
+      http_listen_port: 8080
+      log_level: info
+
+    # Single-replica rings: in-process memberlist with loopback address.
+    distributor:
+      ring:
+        instance_addr: 127.0.0.1
+        kvstore:
+          store: memberlist
+
+    ingester:
+      ring:
+        instance_addr: 127.0.0.1
+        kvstore:
+          store: memberlist
+        replication_factor: 1
+
+    store_gateway:
+      sharding_ring:
+        replication_factor: 1
+
+    blocks_storage:
+      backend: filesystem
+      filesystem:
+        dir: /data/blocks
+      tsdb:
+        dir: /data/tsdb
+      bucket_store:
+        sync_dir: /data/tsdb-sync
+
+    compactor:
+      data_dir: /data/compactor
+      sharding_ring:
+        kvstore:
+          store: memberlist
+
+    ruler_storage:
+      backend: filesystem
+      filesystem:
+        dir: /data/rules

@@ -11,6 +11,15 @@ data:
             endpoint: 0.0.0.0:4317
           http:
             endpoint: 0.0.0.0:4318
+      kubeletstats:
+        collection_interval: 30s
+        auth_type: serviceAccount
+        # status.hostIP via Downward API (node name DNS is unreliable on some clusters).
+        endpoint: https://${env:K8S_NODE_IP}:10250
+        insecure_skip_verify: true
+        metric_groups:
+          - node
+          - pod
 
     processors:
       batch:
@@ -29,6 +38,14 @@ data:
         endpoint: tempo.observability.svc.cluster.local:4317
         tls:
           insecure: true
+      prometheusremotewrite:
+        endpoint: http://mimir.observability.svc.cluster.local:8080/api/v1/push
+        tls:
+          insecure: true
+        # Without this, k8s.pod.name / k8s.node.name stay on the OTel resource and
+        # only appear on target_info — every pod's series looks like one vague metric.
+        resource_to_telemetry_conversion:
+          enabled: true
 
     extensions:
       health_check:
@@ -41,3 +58,7 @@ data:
           receivers: [otlp]
           processors: [k8sattributes, batch]
           exporters: [otlp/tempo]
+        metrics:
+          receivers: [kubeletstats]
+          processors: [batch]
+          exporters: [prometheusremotewrite]
