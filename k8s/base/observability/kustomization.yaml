@@ -7,6 +7,8 @@ resources:
   - namespace.yaml
   - tempo-config.yaml
   - tempo.yaml
+  - mimir-config.yaml
+  - mimir.yaml
   - grafana-secret.yaml
   - grafana-datasources.yaml
   - grafana.yaml

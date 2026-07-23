@@ -15,3 +15,13 @@ data:
         editable: false
         jsonData:
           httpMethod: GET
+      - name: Mimir
+        type: prometheus
+        uid: mimir
+        access: proxy
+        url: http://mimir:8080/prometheus
+        isDefault: false
+        editable: false
+        jsonData:
+          httpMethod: GET
+          prometheusType: Mimir
