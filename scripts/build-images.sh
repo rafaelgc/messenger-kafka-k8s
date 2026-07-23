@@ -49,7 +49,7 @@ Examples:
 Notes:
   - Local kind clusters use --load-kind; EKS pulls from ECR (use --push-ecr).
   - ECR repository names match service names (e.g. users, frontend).
-  - Prod manifests: run ./scripts/configure-prod-ecr.sh before kubectl apply -k k8s/overlays/prod
+  - Prod manifests: run ./scripts/prepare-prod-deploy.sh (or configure-prod-ecr.sh) before kubectl apply -k k8s/overlays/prod
   - Frontend URLs: frontend/.env.prod (default build) or frontend/.env with build-frontend.sh --dev
 EOF
 }

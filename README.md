@@ -78,7 +78,7 @@ Manifests live under `k8s/` (Kustomize base + `overlays/local` and `overlays/pro
 After creating or resetting a cluster, install those add-ons once:
 
 ```bash
-./scripts/setup-local-cluster.sh
+./scripts/install-cluster-addons.sh
 ```
 
 The script checks cluster connectivity, installs **ingress-nginx**, and installs the **MongoDB Community Operator** (with CRDs). It is safe to re-run if a component is already present.
@@ -220,29 +220,17 @@ Requires AWS credentials and a configured region (`AWS_REGION` or `aws configure
 
 For the frontend, URLs are read from `frontend/.env.prod` (edit that file for your domains). EKS nodes are ARM64 (`t4g.large`); images built on Apple Silicon match that architecture automatically.
 
-#### Step 5. Configure the prod overlay
+#### Step 5. Prepare prod deploy (ECR + cluster add-ons)
 
-Before `kubectl apply`, point manifests at ECR and set your hostnames:
-
-```bash
-./scripts/configure-prod-ecr.sh
-```
-
-This rewrites `k8s/overlays/prod/ecr/kustomization.yaml` with your registry host (otherwise Kubernetes treats names like `frontend:latest` as Docker Hub). EKS worker nodes use their IAM role to pull from ECR in the same account — no `imagePullSecrets` needed.
-
-Edit production hostnames in `k8s/overlays/prod/hosts-configmap.yaml`.
-
-#### Step 6. Install cluster add-ons
-
-Install the MongoDB Community Operator once (skip ingress-nginx on EKS — the ALB controller is installed by CDK):
+Point manifests at ECR and install the MongoDB Community Operator (ingress-nginx is skipped — CDK’s AWS Load Balancer Controller handles Ingress on EKS):
 
 ```bash
-./scripts/setup-local-cluster.sh --skip-ingress-nginx
+./scripts/prepare-prod-deploy.sh
 ```
 
-The operator must be running before you apply manifests that create `MongoDBCommunity` resources.
+Safe to re-run. Edit production hostnames in `k8s/overlays/prod/hosts-configmap.yaml` if needed. EKS nodes pull from ECR in the same account via their IAM role — no `imagePullSecrets`.
 
-#### Step 7. Deploy the application (`kubectl apply`)
+#### Step 6. Deploy the application (`kubectl apply`)
 
 ```bash
 kubectl apply -k k8s/overlays/prod
@@ -271,7 +259,7 @@ kubectl apply -k k8s/overlays/prod
 
 (`WaitForFirstConsumer` binding is normal: PVCs stay Pending until a pod that uses them is scheduled.)
 
-#### Step 8. Create Kafka topics
+#### Step 7. Create Kafka topics
 
 Kafka is configured with `auto.create.topics.enable=false`, so create `message.sent` after the broker is Running (same idea as Compose `kafka-init`):
 
