@@ -168,17 +168,6 @@ Two layers apply: **AWS IAM permissions** (who may talk to the EKS control plane
 
 Alternatively, attach the AWS managed policy **`AmazonEKSClusterAdminPolicy`** scoped to your cluster (same intent, less custom JSON).
 
-**Using the cluster**
-
-- Configure `kubectl` with the **same IAM user** as in `cdk.context.json` (credentials in `~/.aws` that resolve to that user).
-- The **root** account user is not mapped unless you add `arn:aws:iam::ACCOUNT:root` to `eksAdminUserArns` (not recommended).
-
-**CDK deploy is separate**
-
-Running `cdk deploy` / `cdk destroy` uses whatever credentials are mounted from `~/.aws` and needs **broader IAM rights** (EKS, EC2, IAM, CloudFormation, etc.) to create the cluster and node groups. That is often the same human operator as `rafa-cli`, but it is a different permission set from day-to-day `kubectl` access. A user listed only for cluster admin cannot deploy infrastructure unless they also have deploy permissions.
-
-See `infra/README.md` for CDK context details.
-
 #### Step 3. Preview infrastructure changes (`cdk diff`)
 
 ```bash
@@ -199,13 +188,6 @@ docker run --rm -it \
   cdk-cli deploy
 ```
 
-After deploy, configure `kubectl` for the new cluster (on the host or inside a container shell):
-
-```bash
-aws eks list-clusters
-aws eks update-kubeconfig --name <cluster-name> --region <region>
-```
-
 CDK also installs the **Amazon EBS CSI driver** addon and a default **`gp3` StorageClass** so PersistentVolumeClaims can provision EBS volumes.
 
 #### Step 4. Build and push images to ECR
@@ -220,15 +202,15 @@ Requires AWS credentials and a configured region (`AWS_REGION` or `aws configure
 
 For the frontend, URLs are read from `frontend/.env.prod` (edit that file for your domains). EKS nodes are ARM64 (`t4g.large`); images built on Apple Silicon match that architecture automatically.
 
-#### Step 5. Prepare prod deploy (ECR + cluster add-ons)
+#### Step 5. Prepare prod deploy (kubeconfig + ECR + cluster add-ons)
 
-Point manifests at ECR and install the MongoDB Community Operator (ingress-nginx is skipped — CDK’s AWS Load Balancer Controller handles Ingress on EKS):
+Point `kubectl` at the EKS cluster, point manifests at ECR, and install the MongoDB Community Operator (ingress-nginx is skipped — CDK’s AWS Load Balancer Controller handles Ingress on EKS):
 
 ```bash
 ./scripts/prepare-prod-deploy.sh
 ```
 
-Safe to re-run. Edit production hostnames in `k8s/overlays/prod/hosts-configmap.yaml` if needed. EKS nodes pull from ECR in the same account via their IAM role — no `imagePullSecrets`.
+The script lists EKS clusters in the default AWS region: if there is exactly one, it runs `aws eks update-kubeconfig` for it; if there are several, pass `--cluster-name <name>`; if there are none, it exits with an error. Safe to re-run. Edit production hostnames in `k8s/overlays/prod/hosts-configmap.yaml` if needed. EKS nodes pull from ECR in the same account via their IAM role — no `imagePullSecrets`.
 
 #### Step 6. Deploy the application (`kubectl apply`)
 
