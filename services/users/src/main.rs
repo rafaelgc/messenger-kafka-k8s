@@ -18,6 +18,7 @@ use mongodb::options::IndexOptions;
 use mongodb::{Collection, IndexModel};
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
+use tracing::Instrument;
 
 const USERS_COLLECTION: &str = "users";
 const TOKEN_TTL_HOURS: i64 = 24;
@@ -206,17 +207,37 @@ async fn authenticate(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let user = state
-        .collection
-        .find_one(doc! { "nickname": &body.nickname })
-        .await
-        .map_err(|error| {
-            eprintln!("failed to load user nickname={}: {error}", body.nickname);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let user = async {
+        state
+            .collection
+            .find_one(doc! { "nickname": &body.nickname })
+            .await
+            .map_err(|error| {
+                eprintln!("failed to load user nickname={}: {error}", body.nickname);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })
+    }
+    .instrument(tracing::info_span!(
+        "db.query",
+        otel.name = "users.find_by_nickname",
+        db.system = "mongodb",
+        db.operation = "find",
+        db.mongodb.collection = USERS_COLLECTION,
+        enduser.id = %body.nickname,
+    ))
+    .await?
+    .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    if !verify_password(&body.password, &user.password_hash) {
+    let password_ok = async {
+        verify_password(&body.password, &user.password_hash)
+    }
+    .instrument(tracing::info_span!(
+        "auth.verify_password",
+        otel.name = "users.verify_password",
+    ))
+    .await;
+
+    if !password_ok {
         return Err(StatusCode::UNAUTHORIZED);
     }
 
@@ -269,6 +290,9 @@ fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error>
 }
 
 fn verify_password(password: &str, password_hash: &str) -> bool {
+    // Temporary: always succeed so load-test traces isolate Argon2 cost.
+    // let _ = (password, password_hash);
+    // true
     let Ok(parsed_hash) = PasswordHash::new(password_hash) else {
         return false;
     };
