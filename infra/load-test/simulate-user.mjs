@@ -225,6 +225,15 @@ async function simulateOneUser({ uid, users, registerWaitMs, skipUserCreation })
       const chatId = await ensureDirectChat(token, peer, log);
       chatIds.push(chatId);
       log.log(`chat ready with ${peer}`, { chatId });
+    }
+
+    log.log("fetching chats");
+    const { chats } = await listChats(token, log);
+    log.log("listChats done", { count: chats?.length ?? 0 });
+
+    for (let p = 0; p < peers.length; p++) {
+      const peer = peers[p];
+      const chatId = chatIds[p];
 
       let sentInChat = 0;
       for (let i = 0; i < MESSAGES_PER_CHAT; i++) {
@@ -410,13 +419,16 @@ async function ensureDirectChat(token, peerNickname, log) {
   throw await httpError("createChat", response, log);
 }
 
-async function findDirectChatId(token, peerNickname, log) {
+async function listChats(token, log) {
   const response = await request("GET", "/chats?limit=100", { token, log });
   if (response.status !== 200) {
     throw await httpError("listChats", response, log);
   }
+  return response.json();
+}
 
-  const { chats } = await response.json();
+async function findDirectChatId(token, peerNickname, log) {
+  const { chats } = await listChats(token, log);
   const match = (chats ?? []).find(
     (chat) =>
       Array.isArray(chat.members) &&
