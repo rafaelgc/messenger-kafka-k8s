@@ -1,5 +1,6 @@
 use axum::{extract::State, http::StatusCode, Json};
 use mongodb::bson::{doc, oid::ObjectId};
+use mongodb::error::{Error, ErrorKind, WriteError, WriteFailure};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -49,26 +50,17 @@ pub(crate) async fn create_chat(
     members.push(creator.clone());
     members.sort_by(|left, right| left.id.cmp(&right.id));
 
-    let name = if members.len() == 2 {
-        if let Some(existing_chat) =
-            find_existing_direct_chat(&state, &members[0].id, &members[1].id).await?
-        {
-            eprintln!(
-                "direct chat already exists for members {} and {}: {}",
-                members[0].id,
-                members[1].id,
-                existing_chat.id.to_hex()
-            );
-            return Err(StatusCode::CONFLICT);
-        }
-
-        direct_message_name(&members)
+    let (name, direct_key) = if members.len() == 2 {
+        (
+            direct_message_name(&members),
+            Some(direct_key(&members[0].id, &members[1].id)),
+        )
     } else {
         if request.name.trim().is_empty() {
             return Err(StatusCode::BAD_REQUEST);
         }
 
-        request.name.trim().to_owned()
+        (request.name.trim().to_owned(), None)
     };
 
     let chat = StoredChat {
@@ -76,9 +68,18 @@ pub(crate) async fn create_chat(
         name,
         creator,
         members,
+        direct_key,
     };
 
     state.collection.insert_one(&chat).await.map_err(|error| {
+        if chat.direct_key.is_some() && is_duplicate_key_error(&error) {
+            eprintln!(
+                "direct chat already exists for direct_key={}",
+                chat.direct_key.as_deref().unwrap_or("")
+            );
+            return StatusCode::CONFLICT;
+        }
+
         eprintln!("failed to create chat: {error}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -98,27 +99,15 @@ fn direct_message_name(members: &[ChatMember]) -> String {
     format!("{} & {}", members[0].nickname, members[1].nickname)
 }
 
-// 1:1 chats are unique by member pair. This may change if we ever allow multiple
-// conversations between the same two users.
-async fn find_existing_direct_chat(
-    state: &AppState,
-    member_id_a: &str,
-    member_id_b: &str,
-) -> Result<Option<StoredChat>, StatusCode> {
-    state
-        .collection
-        .find_one(doc! {
-            "$and": [
-                { "members.id": member_id_a },
-                { "members.id": member_id_b },
-                { "members": { "$size": 2 } },
-            ]
-        })
-        .await
-        .map_err(|error| {
-            eprintln!(
-                "failed to check for existing direct chat between {member_id_a} and {member_id_b}: {error}"
-            );
-            StatusCode::INTERNAL_SERVER_ERROR
-        })
+/// Builds the DM uniqueness key: sorted ids joined with `:`.
+/// Same pair always produces the same string regardless of who initiated the chat.
+fn direct_key(member_id_smaller: &str, member_id_larger: &str) -> String {
+    format!("{member_id_smaller}:{member_id_larger}")
+}
+
+fn is_duplicate_key_error(error: &Error) -> bool {
+    matches!(
+        error.kind.as_ref(),
+        ErrorKind::Write(WriteFailure::WriteError(WriteError { code: 11000, .. }))
+    )
 }

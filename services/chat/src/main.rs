@@ -2,10 +2,11 @@ mod chats;
 mod telemetry;
 
 use mongodb::bson::{doc, oid::ObjectId};
+use mongodb::options::IndexOptions;
 use mongodb::{Collection, IndexModel};
 use serde::{Deserialize, Serialize};
 
-const CHATS_COLLECTION: &str = "chats";
+pub(crate) const CHATS_COLLECTION: &str = "chats";
 
 #[derive(Clone)]
 pub(crate) struct AppState {
@@ -25,6 +26,14 @@ pub(crate) struct StoredChat {
     name: String,
     creator: ChatMember,
     members: Vec<ChatMember>,
+    /// DM uniqueness without a pre-insert find.
+    ///
+    /// For 1:1 chats only: sorted member ids as `{smaller}:{larger}`. A unique sparse
+    /// index on this field makes a second create of the same pair fail with duplicate
+    /// key (mapped to 409), so we insert once instead of find-existing-then-insert
+    /// (which was slow under load and racy with secondaries). Group chats omit it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    direct_key: Option<String>,
 }
 
 #[tokio::main]
@@ -33,6 +42,7 @@ async fn main() {
 
     let collection = create_collection().await;
     ensure_members_index(&collection).await;
+    ensure_direct_key_index(&collection).await;
 
     let state = AppState { collection };
 
@@ -97,5 +107,17 @@ async fn ensure_members_index(collection: &Collection<StoredChat>) {
 
     if let Err(error) = collection.create_index(index).await {
         eprintln!("failed to ensure members index: {error}");
+    }
+}
+
+async fn ensure_direct_key_index(collection: &Collection<StoredChat>) {
+    // Unique + sparse: at most one DM per member pair; group chats (no field) ignored.
+    let index = IndexModel::builder()
+        .keys(doc! { "direct_key": 1 })
+        .options(IndexOptions::builder().unique(true).sparse(true).build())
+        .build();
+
+    if let Err(error) = collection.create_index(index).await {
+        eprintln!("failed to ensure unique direct_key index: {error}");
     }
 }
