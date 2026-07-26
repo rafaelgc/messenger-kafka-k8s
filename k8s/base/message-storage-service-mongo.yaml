@@ -76,6 +76,7 @@ metadata:
   name: mongodb-0
   namespace: mongodb-operator
 spec:
+  # Keep mongodb-shard-bootstrap ConfigMap seed list in sync if you change members.
   members: 2 # local dev: 3rd pod (mongodb-0-2) failed to schedule (Insufficient cpu)
   type: ReplicaSet
   version: "8.0.0"
@@ -140,6 +141,7 @@ metadata:
   name: mongodb-1
   namespace: mongodb-operator
 spec:
+  # Keep mongodb-shard-bootstrap ConfigMap seed list in sync if you change members.
   members: 2
   type: ReplicaSet
   version: "8.0.0"
@@ -421,7 +423,11 @@ spec:
             defaultMode: 0400
 ---
 # One-shot cluster bootstrap: register shards and enable sharding on messaging.messages.
-# Re-apply after script changes: kubectl delete job mongodb-shard-bootstrap -n mongodb
+# Re-apply after script changes: kubectl delete job mongodb-shard-bootstrap -n mongodb-operator
+#
+# Shard seed lists below must match each MongoDBCommunity `spec.members` (hostnames
+# mongodb-<shard>-0 .. mongodb-<shard>-(members-1)). If you change member count on
+# mongodb-0 / mongodb-1, update the corresponding conn string here too.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -431,7 +437,7 @@ data:
   bootstrap.js: |
     const shards = [
       "mongodb-0/mongodb-0-0.mongodb-0-svc.mongodb-operator.svc.cluster.local:27017,mongodb-0-1.mongodb-0-svc.mongodb-operator.svc.cluster.local:27017",
-      "mongodb-1/mongodb-1-0.mongodb-1-svc.mongodb-operator.svc.cluster.local:27017,mongodb-1-1.mongodb-1-svc.mongodb-operator.svc.cluster.local:27017,mongodb-1-2.mongodb-1-svc.mongodb-operator.svc.cluster.local:27017",
+      "mongodb-1/mongodb-1-0.mongodb-1-svc.mongodb-operator.svc.cluster.local:27017,mongodb-1-1.mongodb-1-svc.mongodb-operator.svc.cluster.local:27017",
     ];
 
     const dbName = "messaging";
