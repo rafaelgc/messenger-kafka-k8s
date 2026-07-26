@@ -81,7 +81,7 @@ metadata:
   labels:
     scheduling.messenger/spot: "true"
 spec:
-  replicas: 2
+  replicas: 4
   selector:
     matchLabels:
       app.kubernetes.io/name: chat
