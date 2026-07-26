@@ -37,9 +37,8 @@ spec:
     authentication:
       modes:
         - SCRAM
-  # Defaults are 500m+500m (=1 CPU/pod), which leaves ~700m free on a t4g.large
-  # that already hosts another Mongo member — not enough for a second default pod.
-  # These requests let chat-mongodb pack beside an existing member (~500m total).
+  # Load-test create storms are CPU-bound on mongod. Limit allows burst to 2 cores;
+  # request stays moderate so AZ-pinned PVC pods can still schedule on t4g nodes.
   statefulSet:
     spec:
       template:
@@ -48,19 +47,19 @@ spec:
             - name: mongod
               resources:
                 requests:
-                  cpu: 250m
-                  memory: 400M
+                  cpu: 500m
+                  memory: 512Mi
                 limits:
-                  cpu: "1"
-                  memory: 500M
+                  cpu: "2"
+                  memory: 1Gi
             - name: mongodb-agent
               resources:
                 requests:
-                  cpu: 250m
-                  memory: 400M
+                  cpu: 100m
+                  memory: 256Mi
                 limits:
-                  cpu: "1"
-                  memory: 500M
+                  cpu: 500m
+                  memory: 512Mi
 ---
 # Chat Service
 apiVersion: v1
