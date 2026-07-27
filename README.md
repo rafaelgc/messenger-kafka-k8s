@@ -4,6 +4,8 @@ This is a distributed messaging system I built to explore how to run a real-time
 
 Users can sign up, open 1:1 chats, or create group conversations. I designed it around a 10,000 concurrent-user target.
 
+You can run the whole stack locally with **Docker Compose**, on a **local Kubernetes** cluster, or on **AWS EKS** using the CDK project in this repo — see [Getting started](#getting-started).
+
 ## Table of contents
 
 - [Architecture](#architecture)
