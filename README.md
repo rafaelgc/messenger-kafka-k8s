@@ -4,12 +4,47 @@ This is a distributed messaging system I built to explore how to run a real-time
 
 Users can sign up, open 1:1 chats, or create group conversations. I designed it around a 10,000 concurrent-user target.
 
+## Things to improve [TODO SECTION]
+
+- SSL/TLS
+- Autoscaling
+- Shard Chats
+
 ## Architecture
 
-When a message is sent, the Public API publishes a `message.sent` event to Kafka. Two consumers react to that event independently:
+```mermaid
+flowchart TB
+    USER["👤 User"]
+    USER -->|HTTP| API[Public API]
 
-- **Message Storage** persists the message in MongoDB.
-- **Message Delivery** delivers it in real time to connected clients over WebSocket.
+    API -->|HTTP| USR[Users]
+    API -->|HTTP| CHAT[Chats]
+    API -->|HTTP| STO[Message Storage]
+
+    API -->|Kafka| KAFKA[(Kafka)]
+    KAFKA -->|message.sent| STO
+    KAFKA -->|message.sent| DEL[Message Delivery]
+    DEL <-->|WebSocket| USER_WS["👤 User"]
+
+    USR --> USR_DB[(Users MongoDB)]
+    CHAT --> CHAT_DB[(Chats MongoDB)]
+
+    subgraph MONGO["Sharded MongoDB"]
+        MONGOS[mongos]
+        S0[(Shard 0)]
+        S1[(Shard 1)]
+        MONGOS --> S0
+        MONGOS --> S1
+    end
+
+    STO --> MONGOS
+```
+
+**Public API** is the HTTP entry point for clients. It forwards requests directly to **Users**, **Chats**, and **Message Storage** (for example, sign-up, chat management, and message history).
+
+When a user sends a message, the Public API publishes a `message.sent` event to **Kafka** instead of calling Storage or Delivery over HTTP. **Message Storage** and **Message Delivery** consume that event independently — Storage persists the message; Delivery pushes it to connected clients over WebSocket.
+
+**Users** and **Chats** each persist data in a dedicated single-node MongoDB instance. **Message Storage** writes to a **sharded MongoDB** cluster (via **mongos**); the `messages` collection is sharded on `chat_id`, with two shard replica sets holding the data.
 
 ## Services
 
