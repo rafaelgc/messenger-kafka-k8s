@@ -1,6 +1,7 @@
 import {
   ApiError,
   authenticate,
+  createChat,
   listChats,
   listMessages,
   registerUser,
@@ -144,5 +145,20 @@ describe("api client", () => {
     await expect(listChats("jwt-token")).rejects.toEqual(
       new ApiError(500, "Could not load your chats."),
     );
+  });
+
+  it("prefers a JSON error body from the API when present", async () => {
+    server.use(
+      http.post(`${API_BASE_URL}/chats`, () => {
+        return HttpResponse.json(
+          { error: "user not found: missing-nick" },
+          { status: 404 },
+        );
+      }),
+    );
+
+    await expect(
+      createChat("jwt-token", { member_nicknames: ["missing-nick"], name: "G" }),
+    ).rejects.toEqual(new ApiError(404, "user not found: missing-nick"));
   });
 });

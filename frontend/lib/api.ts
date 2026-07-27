@@ -73,6 +73,8 @@ function errorMessageForStatus(status: number, fallback: string): string {
       return "Invalid nickname or password.";
     case 403:
       return "You do not have access to this chat.";
+    case 404:
+      return "User not found.";
     case 409:
       return "That nickname is already taken.";
     case 502:
@@ -83,10 +85,18 @@ function errorMessageForStatus(status: number, fallback: string): string {
 }
 
 async function parseError(response: Response, fallback: string): Promise<never> {
-  throw new ApiError(
-    response.status,
-    errorMessageForStatus(response.status, fallback),
-  );
+  let message = errorMessageForStatus(response.status, fallback);
+
+  try {
+    const body = (await response.json()) as { error?: unknown };
+    if (typeof body.error === "string" && body.error.trim()) {
+      message = body.error;
+    }
+  } catch {
+    // Keep the status-based / fallback message when the body is empty or not JSON.
+  }
+
+  throw new ApiError(response.status, message);
 }
 
 export async function registerUser(
@@ -163,12 +173,6 @@ export async function createChat(
   });
 
   if (!response.ok) {
-    if (response.status === 409) {
-      throw new ApiError(
-        409,
-        "A direct chat with that person already exists.",
-      );
-    }
     await parseError(response, "Could not create the chat.");
   }
 
