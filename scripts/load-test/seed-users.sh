@@ -11,7 +11,7 @@ set -euo pipefail
 
 API_BASE_URL="${API_BASE_URL:-http://api.messenger.rgonzalez.xyz}"
 PASSWORD="${LOAD_TEST_PASSWORD:-load-test-password}"
-CONCURRENCY="${SEED_CONCURRENCY:-32}"
+CONCURRENCY="${SEED_CONCURRENCY:-10}"
 START_FROM="${SEED_START_FROM:-0}"
 USERS=""
 
@@ -26,13 +26,13 @@ Options:
   --users <N>         Number of users to create (required)
   --start-from <N>    First user id (default 0). Example: --users 500 --start-from 8000
                       creates user8000 .. user8499
-  --concurrency <N>   Max parallel curl requests (default 32)
+  --concurrency <N>   Max parallel curl requests (default 10)
   -h, --help          Show this help
 
 Env:
   API_BASE_URL          default http://api.messenger.rgonzalez.xyz
   LOAD_TEST_PASSWORD    default load-test-password
-  SEED_CONCURRENCY      default 32
+  SEED_CONCURRENCY      default 10
   SEED_START_FROM       default 0
 EOF
 }

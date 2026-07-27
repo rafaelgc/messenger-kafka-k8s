@@ -22,6 +22,7 @@ Users can sign up, open 1:1 chats, or create group conversations. I designed it 
     - [Step 6. Deploy the application (`kubectl apply`)](#step-6-deploy-the-application-kubectl-apply)
     - [Step 7. Create Kafka topics](#step-7-create-kafka-topics)
     - [Cleaning up (EKS)](#cleaning-up-eks)
+- [Load testing](#load-testing)
 - [Things to improve](#things-to-improve)
 
 ## Architecture
@@ -265,18 +266,6 @@ The script lists EKS clusters in the default AWS region: if there is exactly one
 kubectl apply -k k8s/overlays/prod
 ```
 
-Or run `kubectl` from the CDK container (mount the repo, AWS creds, and kubeconfig):
-
-```bash
-docker run --rm \
-  -v "$PWD:/repo" \
-  -v ~/.aws:/root/.aws:ro \
-  -v ~/.kube:/root/.kube:ro \
-  -w /repo \
-  --entrypoint kubectl \
-  cdk-cli apply -k k8s/overlays/prod
-```
-
 After deploy, point DNS at the ALB (`kubectl get ingress messaging -o wide`).
 
 **PVC troubleshooting:** if PVCs were created before the EBS CSI driver / default StorageClass existed, delete stuck claims and re-apply:
@@ -332,6 +321,43 @@ Delete the Ingress or the whole prod overlay **before** `cdk destroy`, and wait 
 
 For a **local** cluster, remove the app with `kubectl delete -k k8s/overlays/local` instead.
 
+## Load testing
+
+Since I wanted to ensure this system can operate with around 10,000 concurrent users, I built a fairly demanding load test. Each virtual user authenticates as `user{N}`, opens **3** direct (1:1) chats with random peers, sends **10** messages per chat, then lists those messages — exercising the full path through Public API → Kafka → Storage / Delivery.
+
+Users must exist **before** the load run. Prefer seeding them with `scripts/load-test/seed-users.sh` (idempotent: HTTP 409 counts as success). The Lambda defaults to `SKIP_USER_CREATION=true`, so it assumes nicknames like `user0` … `user{N-1}` are already registered with the shared load-test password.
+
+```bash
+./scripts/load-test/seed-users.sh --users 1000
+```
+
+Deploy the load-test Lambda with CDK (`MessengerLoadTestStack` — same CDK workflow as the EKS stack above):
+
+```bash
+docker run --rm -it \
+  -v "$PWD/infra:/workspace" \
+  -v ~/.aws:/root/.aws:ro \
+  -w /workspace \
+  cdk-cli deploy MessengerLoadTestStack
+```
+
+Then fire async batch invokes:
+
+```bash
+./scripts/load-test/invoke-simulate-users.sh \
+  --users 1000 --batch-size 20 --start-in 20
+```
+
+`--batch-size` is how many users a **single** Lambda simulates in one invocation. Packing users into fewer, larger invokes cuts the number of Lambdas you launch, which keeps the load test more cost-effective.
+
+`--start-in` (or `--start-at`) sets a shared wall-clock start so every Lambda waits until the same moment before simulating — otherwise early invokes would begin hitting the API while later ones are still being queued.
+
+To evaluate the results of the load test:
+
+- Check the logs and success metrics of the AWS Lambda execution.
+- Check in Grafana the Traces to identify 5XX errors or Metrics to locate CPU/memory exhaustion.
+- Check AWS Load Balancer to identify HTTP request process exhaustion.
+
 ## Things to improve
 
 - **SSL/TLS** — The ingress (ALB) is not configured for HTTPS yet, so traffic reaches the app over plain HTTP. MongoDB connections are also unencrypted; enabling TLS on the server and in client connection strings is a standard production setting for MongoDB.
@@ -341,3 +367,5 @@ For a **local** cluster, remove the app with `kubectl delete -k k8s/overlays/loc
 - **Shard Chats** — Messages are already sharded, but the Chats database is still a single MongoDB instance. In a production-grade deployment it would likely need sharding too, since chat metadata is read and updated frequently.
 
 - **Kafka controller / broker** — Kafka currently runs as a single node that acts as both controller and broker. If that instance goes down, the event pipeline stops — separate controller and broker roles (with replication) would be needed for proper high availability.
+
+- **Logging** — Traces go to Tempo and metrics to Mimir, but there is no log aggregation yet. Adding something like Loki (or similar) would complete the observability stack so logs can be queried alongside traces and metrics.
