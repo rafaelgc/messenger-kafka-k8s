@@ -7,9 +7,9 @@ Users can sign up, open 1:1 chats, or create group conversations. I designed it 
 ## Table of contents
 
 - [Architecture](#architecture)
-- [Services](#services)
-  - [Infrastructure](#infrastructure)
-  - [Application](#application)
+  - [High availability](#high-availability)
+  - [Cost optimization](#cost-optimization)
+- [Observability](#observability)
 - [Getting started](#getting-started)
   - [Development workflow](#development-workflow)
   - [Local Kubernetes](#local-kubernetes)
@@ -61,32 +61,41 @@ When a user sends a message, the Public API publishes a `message.sent` event to 
 
 **Users** and **Chats** each persist data in a dedicated single-node MongoDB instance. **Message Storage** writes to a **sharded MongoDB** cluster (via **mongos**); the `messages` collection is sharded on `chat_id`, with two shard replica sets holding the data.
 
-## Services
+### High availability
 
-### Infrastructure
+On EKS, the application tier runs with **multiple replicas** — Public API, Users, Chat, Message Storage, Message Delivery, and Frontend all have more than one pod. **mongos** is replicated too, so Message Storage does not depend on a single query entry point.
 
-| Service | Description |
+Each shard in the messages cluster is a **two-member replica set**, and the config servers run as a small replica set as well — so MongoDB data itself is not tied to one process.
+
+Prod applies **topology spread constraints** on `topology.kubernetes.io/zone` (`minDomains: 2`): pods of the same service must land in **at least two availability zones**, so losing one zone should not take out every replica. Extra replicas may share an AZ as long as another zone also has at least one pod (for example, three Public API pods might be 2+1 across zones, but never all in one zone).
+
+### Cost optimization
+
+On EKS I split capacity into two node groups for cost without putting durable state at risk.
+
+**Stateless** workloads — Public API, Frontend, Users, Chat, Message Storage (app), Message Delivery, mongos, and the debug UIs — run on **Spot**. Spot is much cheaper than on-demand for the same instance type; if a node is reclaimed, Kubernetes reschedules the pods and clients reconnect (WebSockets included). Workloads opt in with a label; the Spot pool is tainted so nothing lands there by accident.
+
+**Stateful** workloads — Kafka, MongoDB shards and config servers, embedded Chat/Users MongoDB, and Tempo — stay on **on-demand**. They bind to EBS volumes and need stable process lifetime; Spot interruptions would mean volume reattach races, replica-set churn, and a lot of operational noise for little savings.
+
+mongos is the deliberate exception on Spot: it is only a query router — the data still lives on on-demand shards.
+
+## Observability
+
+The observability stack lives in the `observability` namespace:
+
+| Component | Role |
 |---|---|
-| **kafka** | Event broker (`soldevelo/kafka`, Bitnami-compatible). All services publish and consume through Kafka. Runs in KRaft mode (no Zookeeper). |
-| **kafka-init** | One-shot container that creates the `message.sent` topic on startup, then exits. Not a second broker — it ensures the topic exists before application services start. |
-| **kafka-ui** | Web UI for browsing topics, messages, and consumer groups. Available at http://localhost:8082 |
-| **storage-mongodb** | MongoDB instance dedicated to the Message Storage service. |
-| **storage-mongo-express** | Web UI for `storage-mongodb`. Available at http://localhost:8083 |
-| **chat-mongodb** | MongoDB instance dedicated to the Chat service. |
-| **chat-mongo-express** | Web UI for `chat-mongodb`. Available at http://localhost:8086 |
-| **users-mongodb** | MongoDB instance dedicated to the Users service. |
-| **users-mongo-express** | Web UI for `users-mongodb`. Available at http://localhost:8089 |
+| **OpenTelemetry Collector** | DaemonSet that receives OTLP from the services (traces and metrics) and forwards them downstream |
+| **Tempo** | Trace storage — Explore traces in Grafana |
+| **Mimir** | Metrics storage (Prometheus-compatible) |
+| **Grafana** | UI for traces and metrics |
 
-### Application
+Services export to the collector over OTLP (`otel-collector.observability.svc.cluster.local:4317`). There is no log aggregation yet (see [Things to improve](#things-to-improve)).
 
-| Service | Language | Port | Description |
-|---|---|---|---|
-| **public-api** | Rust | 8080 | Public HTTP API. Accepts client requests and publishes `message.sent` events. |
-| **chat** | Rust | 8085 | Chat metadata API. Returns chat members and related attributes. |
-| **users** | Rust | — | User registration and authentication. Issues JWT tokens. Internal only — exposed via `public-api`. |
-| **message-storage** | Rust | — | Consumes `message.sent` and stores message payloads in `storage-mongodb`. |
-| **message-delivery** | Rust | 8081 | Maintains WebSocket connections with online clients. Consumes `message.sent` and delivers messages in real time. |
-| **frontend** | Next.js | 3000 | Web UI. Dev server with hot reload via `npm run dev`. Available at http://localhost:3000 |
+Grafana is exposed via ingress:
+
+- Local: http://grafana.localhost
+- EKS: http://grafana.yourdomain.xyz (hostname comes from `k8s/overlays/prod/hosts-configmap.yaml`)
 
 ## Getting started
 
@@ -361,6 +370,8 @@ To evaluate the results of the load test:
 ## Things to improve
 
 - **SSL/TLS** — The ingress (ALB) is not configured for HTTPS yet, so traffic reaches the app over plain HTTP. MongoDB connections are also unencrypted; enabling TLS on the server and in client connection strings is a standard production setting for MongoDB.
+
+- **ALB health checks** — Target groups still use the default `GET /` check (success = 200). That works for Public API (which has a root handler), but Message Delivery only exposes `/ws`, so probes get 404 and every replica is marked unhealthy. When all targets fail, the ALB fails open and keeps sending traffic anyway — so the service still works, but the checks do not actually take bad pods out of rotation. Proper `/health` endpoints and per-service `healthcheck-path` annotations would fix this.
 
 - **CPU / memory autoscaling** — The Cluster Autoscaler can add nodes when the node group runs out of capacity and pods cannot be scheduled. That is not the same as scaling under load: there is no Horizontal Pod Autoscaler (or similar) to increase replicas when CPU or memory usage is high.
 
