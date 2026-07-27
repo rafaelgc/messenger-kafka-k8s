@@ -1,14 +1,15 @@
 # Messaging Distributed System
 
-A distributed, scalable messaging platform built as a set of services on **Kubernetes** (local cluster or AWS EKS). Services communicate through Kafka event streaming; persistence and push token storage use dedicated MongoDB instances.
+This is a distributed messaging system I built to explore how to run a real-time chat platform at scale.
+
+Users can sign up, open 1:1 chats, or create group conversations. I designed it around a 10,000 concurrent-user target.
 
 ## Architecture
 
-When a message is sent, the Public API publishes a `message.sent` event to Kafka. Three consumers react to that event independently:
+When a message is sent, the Public API publishes a `message.sent` event to Kafka. Two consumers react to that event independently:
 
 - **Message Storage** persists the message in MongoDB.
-- **Message Delivery** pushes it in real time to connected clients over WebSocket.
-- **Message Push** sends a notification to offline users via a push connector.
+- **Message Delivery** delivers it in real time to connected clients over WebSocket.
 
 ## Services
 
@@ -21,8 +22,6 @@ When a message is sent, the Public API publishes a `message.sent` event to Kafka
 | **kafka-ui** | Web UI for browsing topics, messages, and consumer groups. Available at http://localhost:8082 |
 | **storage-mongodb** | MongoDB instance dedicated to the Message Storage service. |
 | **storage-mongo-express** | Web UI for `storage-mongodb`. Available at http://localhost:8083 |
-| **push-mongodb** | MongoDB instance dedicated to the Message Push service (device tokens for Google/Apple notifications). |
-| **push-mongo-express** | Web UI for `push-mongodb`. Available at http://localhost:8084 |
 | **chat-mongodb** | MongoDB instance dedicated to the Chat service. |
 | **chat-mongo-express** | Web UI for `chat-mongodb`. Available at http://localhost:8086 |
 | **users-mongodb** | MongoDB instance dedicated to the Users service. |
@@ -37,7 +36,6 @@ When a message is sent, the Public API publishes a `message.sent` event to Kafka
 | **users** | Rust | — | User registration and authentication. Issues JWT tokens. Internal only — exposed via `public-api`. |
 | **message-storage** | Rust | — | Consumes `message.sent` and stores message payloads in `storage-mongodb`. |
 | **message-delivery** | Rust | 8081 | Maintains WebSocket connections with online clients. Consumes `message.sent` and delivers messages in real time. |
-| **message-push** | Rust | — | Consumes `message.sent` and sends push notifications to offline users. Stores device tokens in `push-mongodb`. Uses a dummy connector for now (no real Google/Apple integration). |
 | **frontend** | Next.js | 3000 | Web UI. Dev server with hot reload via `npm run dev`. Available at http://localhost:3000 |
 
 ## Getting started
@@ -185,7 +183,7 @@ docker run --rm -it \
   -v "$PWD/infra:/workspace" \
   -v ~/.aws:/root/.aws:ro \
   -w /workspace \
-  cdk-cli deploy
+  cdk-cli deploy --all
 ```
 
 CDK also installs the **Amazon EBS CSI driver** addon and a default **`gp3` StorageClass** so PersistentVolumeClaims can provision EBS volumes.
