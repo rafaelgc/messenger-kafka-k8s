@@ -73,9 +73,8 @@ Prod applies **topology spread constraints** on `topology.kubernetes.io/zone` (`
 
 On EKS I split capacity into two node groups for cost without putting durable state at risk.
 
-**Stateless** workloads — Public API, Frontend, Users, Chat, Message Storage (app), Message Delivery, mongos, and the debug UIs — run on **Spot**. Spot is much cheaper than on-demand for the same instance type; if a node is reclaimed, Kubernetes reschedules the pods and clients reconnect (WebSockets included). Workloads opt in with a label; the Spot pool is tainted so nothing lands there by accident.
-
-**Stateful** workloads — Kafka, MongoDB shards and config servers, embedded Chat/Users MongoDB, and Tempo — stay on **on-demand**. They bind to EBS volumes and need stable process lifetime; Spot interruptions would mean volume reattach races, replica-set churn, and a lot of operational noise for little savings.
+- **Stateless** workloads — Public API, Frontend, Users, Chat, Message Storage (app), Message Delivery, mongos, and the debug UIs — run on **Spot**. Spot is much cheaper than on-demand for the same instance type; if a node is reclaimed, Kubernetes reschedules the pods and clients reconnect (WebSockets included). Workloads opt in with a label; the Spot pool is tainted so nothing lands there by accident.
+- **Stateful** workloads — Kafka, MongoDB shards and config servers, embedded Chat/Users MongoDB, and Tempo — stay on **on-demand**. They bind to EBS volumes and need stable process lifetime; Spot interruptions would mean volume reattach races, replica-set churn, and a lot of operational noise for little savings.
 
 mongos is the deliberate exception on Spot: it is only a query router — the data still lives on on-demand shards.
 
