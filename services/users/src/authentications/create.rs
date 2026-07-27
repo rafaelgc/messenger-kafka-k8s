@@ -60,13 +60,16 @@ pub(crate) async fn authenticate(
     .await?
     .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    // let password_ok = async { verify_password(&body.password, &user.password_hash) }
-    //     .instrument(tracing::info_span!(
-    //         "auth.verify_password",
-    //         otel.name = "users.verify_password",
-    //     ))
-    //     .await;
-    let password_ok = true;
+    let password_ok = if state.verify_passwords {
+        async { verify_password(&body.password, &user.password_hash) }
+            .instrument(tracing::info_span!(
+                "auth.verify_password",
+                otel.name = "users.verify_password",
+            ))
+            .await
+    } else {
+        true
+    };
 
     if !password_ok {
         return Err(StatusCode::UNAUTHORIZED);
@@ -83,9 +86,6 @@ pub(crate) async fn authenticate(
 }
 
 fn verify_password(password: &str, password_hash: &str) -> bool {
-    // Temporary: always succeed so load-test traces isolate Argon2 cost.
-    // let _ = (password, password_hash);
-    // true
     let Ok(parsed_hash) = PasswordHash::new(password_hash) else {
         return false;
     };

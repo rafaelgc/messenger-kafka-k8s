@@ -14,6 +14,8 @@ pub(crate) const USERS_COLLECTION: &str = "users";
 pub(crate) struct AppState {
     collection: Collection<UserDocument>,
     jwt_secret: String,
+    /// When false, authenticate skips Argon2 (load-test only). Default true.
+    verify_passwords: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -29,12 +31,17 @@ async fn main() {
     let telemetry = telemetry::TelemetryGuard::init();
 
     let jwt_secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
+    let verify_passwords = parse_bool_env("VERIFY_PASSWORDS", true);
+    if !verify_passwords {
+        tracing::warn!("VERIFY_PASSWORDS=false — Argon2 checks are disabled (load-test mode)");
+    }
     let collection = create_collection().await;
     ensure_nickname_index(&collection).await;
 
     let state = AppState {
         collection,
         jwt_secret,
+        verify_passwords,
     };
 
     // [TODO] Add GET /health (200 OK) for ALB/Kubernetes health checks; point the ingress
@@ -100,5 +107,16 @@ async fn ensure_nickname_index(collection: &Collection<UserDocument>) {
 
     if let Err(error) = collection.create_index(index).await {
         eprintln!("failed to ensure unique nickname index: {error}");
+    }
+}
+
+fn parse_bool_env(name: &str, default: bool) -> bool {
+    match std::env::var(name) {
+        Ok(value) => match value.trim().to_lowercase().as_str() {
+            "1" | "true" | "yes" | "y" | "on" => true,
+            "0" | "false" | "no" | "n" | "off" => false,
+            other => panic!("{name} must be a boolean, got: {other}"),
+        },
+        Err(_) => default,
     }
 }

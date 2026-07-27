@@ -119,6 +119,9 @@ spec:
               value: 0.0.0.0:8088
             - name: JWT_SECRET
               value: dev-jwt-secret-change-in-production
+            # Default true. Set false only for load tests that skip Argon2 cost.
+            - name: VERIFY_PASSWORDS
+              value: "true"
             - name: OTEL_SERVICE_NAME
               value: users
             - name: OTEL_EXPORTER_OTLP_ENDPOINT

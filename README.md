@@ -353,6 +353,21 @@ Users must exist **before** the load run. Prefer seeding them with `scripts/load
 ./scripts/load-test/seed-users.sh --users 1000
 ```
 
+<details>
+<summary><strong>Password verification during load tests</strong></summary>
+
+This project uses **Argon2** for password hashing and verification. Argon2 is intentionally expensive so offline brute-force attacks are costly.
+
+On the hardware used here, verifying a password takes on the order of **~40 ms** of CPU time (see `docs/performance-tests.md`). Unlike waiting on the network or MongoDB, that work is **CPU-bound**: each verification holds a core for the duration of the hash check.
+
+As a rough estimate, one vCPU can do about **25 verifications per second**. A burst of **10,000 logins** finishing in about **4 seconds** would therefore need on the order of **~100 vCPUs** just for Argon2 — before counting the Public API, Kafka, Chat, Storage, Delivery, and databases that the load test is meant to stress.
+
+The Users service already becomes the bottleneck much earlier when verification is enabled (hundreds of concurrent logins with a small replica count). Scaling auth pods far enough to clear a 10k login wave would burn a lot of Spot/on-demand capacity while teaching little about the rest of the pipeline.
+
+The load tests therefore focus on the messaging path after users exist. Set **`VERIFY_PASSWORDS=false`** on the Users service for those runs (env var; **default is `true`**). Authentication still issues JWTs after looking the user up, but the Argon2 verify step is skipped. Leave verification **enabled** outside load testing.
+
+</details>
+
 Deploy the load-test Lambda with CDK (`MessengerLoadTestStack` — same CDK workflow as the EKS stack above):
 
 ```bash
