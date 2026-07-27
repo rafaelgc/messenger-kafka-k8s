@@ -7,6 +7,7 @@ Users can sign up, open 1:1 chats, or create group conversations. I designed it 
 ## Table of contents
 
 - [Architecture](#architecture)
+  - [Scalability](#scalability)
   - [High availability](#high-availability)
   - [Cost optimization](#cost-optimization)
 - [Observability](#observability)
@@ -59,15 +60,19 @@ flowchart TB
 
 When a user sends a message, the Public API publishes a `message.sent` event to **Kafka** instead of calling Storage or Delivery over HTTP. **Message Storage** and **Message Delivery** consume that event independently — Storage persists the message; Delivery pushes it to connected clients over WebSocket.
 
-**Users** and **Chats** each persist data in a dedicated single-node MongoDB instance. **Message Storage** writes to a **sharded MongoDB** cluster (via **mongos**); the `messages` collection is sharded on `chat_id`, with two shard replica sets holding the data.
+**Users** and **Chats** each persist data in a dedicated single-node MongoDB instance. **Message Storage** writes to a **sharded MongoDB** cluster (via **mongos**); the `messages` collection is sharded on `chat_id`.
+
+### Scalability
+
+Application services are deployed with **multiple replicas** and can be scaled further by raising the Deployment replica count (and letting Cluster Autoscaler add nodes when pods stay Pending). That applies to Public API, Users, Chat, Message Storage, Message Delivery, Frontend, and mongos — more pods share request and consumer load without changing how clients talk to the system.
+
+Message volume is the data plane that grows without a natural upper bound. **Message Storage** therefore uses a **sharded MongoDB** cluster: the app talks only to **mongos**, and the `messages` collection is sharded on hashed `chat_id`. Today that is two shard replica sets; as stored messages or write/read pressure grows, additional shards can be added so capacity scales horizontally with the data, not only with app replicas.
 
 ### High availability
 
-On EKS, the application tier runs with **multiple replicas** — Public API, Users, Chat, Message Storage, Message Delivery, and Frontend all have more than one pod. **mongos** is replicated too, so Message Storage does not depend on a single query entry point.
+Replicas are not only for throughput — they also provide redundancy. Prod applies **topology spread constraints** on `topology.kubernetes.io/zone` (`minDomains: 2`): pods of the same service must land in **at least two availability zones**, so a single-AZ outage should not take out every replica. Extra replicas may share an AZ as long as another zone also has at least one pod (for example, three Public API pods might be 2+1 across zones, but never all in one zone).
 
-Each shard in the messages cluster is a **two-member replica set**, and the config servers run as a small replica set as well — so MongoDB data itself is not tied to one process.
-
-Prod applies **topology spread constraints** on `topology.kubernetes.io/zone` (`minDomains: 2`): pods of the same service must land in **at least two availability zones**, so losing one zone should not take out every replica. Extra replicas may share an AZ as long as another zone also has at least one pod (for example, three Public API pods might be 2+1 across zones, but never all in one zone).
+On the Message Storage data plane, each MongoDB shard and the config servers run as **multi-member replica sets**, and **mongos** is replicated too — so losing one mongod or one router does not take out the whole messages path.
 
 ### Cost optimization
 
