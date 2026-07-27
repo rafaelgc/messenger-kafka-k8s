@@ -4,11 +4,25 @@ This is a distributed messaging system I built to explore how to run a real-time
 
 Users can sign up, open 1:1 chats, or create group conversations. I designed it around a 10,000 concurrent-user target.
 
-## Things to improve [TODO SECTION]
+## Table of contents
 
-- SSL/TLS
-- Autoscaling
-- Shard Chats
+- [Architecture](#architecture)
+- [Services](#services)
+  - [Infrastructure](#infrastructure)
+  - [Application](#application)
+- [Getting started](#getting-started)
+  - [Development workflow](#development-workflow)
+  - [Local Kubernetes](#local-kubernetes)
+  - [Deploying to AWS (EKS)](#deploying-to-aws-eks)
+    - [Step 1. Build the CDK container image](#step-1-build-the-cdk-container-image)
+    - [Step 2. Configure CDK context (EKS admin access)](#step-2-configure-cdk-context-eks-admin-access)
+    - [Step 3. Preview infrastructure changes (`cdk diff`)](#step-3-preview-infrastructure-changes-cdk-diff)
+    - [Step 4. Build and push images to ECR](#step-4-build-and-push-images-to-ecr)
+    - [Step 5. Prepare prod deploy (kubeconfig + ECR + cluster add-ons)](#step-5-prepare-prod-deploy-kubeconfig-ecr-cluster-add-ons)
+    - [Step 6. Deploy the application (`kubectl apply`)](#step-6-deploy-the-application-kubectl-apply)
+    - [Step 7. Create Kafka topics](#step-7-create-kafka-topics)
+    - [Cleaning up (EKS)](#cleaning-up-eks)
+- [Things to improve](#things-to-improve)
 
 ## Architecture
 
@@ -318,6 +332,12 @@ Delete the Ingress or the whole prod overlay **before** `cdk destroy`, and wait 
 
 For a **local** cluster, remove the app with `kubectl delete -k k8s/overlays/local` instead.
 
-### Production images
+## Things to improve
 
-Each service also has a multi-stage `services/<name>/Dockerfile` for production or CI builds. Those compile a release binary into a minimal runtime image and are not used by `docker compose up`.
+- **SSL/TLS** — The ingress (ALB) is not configured for HTTPS yet, so traffic reaches the app over plain HTTP. MongoDB connections are also unencrypted; enabling TLS on the server and in client connection strings is a standard production setting for MongoDB.
+
+- **CPU / memory autoscaling** — The Cluster Autoscaler can add nodes when the node group runs out of capacity and pods cannot be scheduled. That is not the same as scaling under load: there is no Horizontal Pod Autoscaler (or similar) to increase replicas when CPU or memory usage is high.
+
+- **Shard Chats** — Messages are already sharded, but the Chats database is still a single MongoDB instance. In a production-grade deployment it would likely need sharding too, since chat metadata is read and updated frequently.
+
+- **Kafka controller / broker** — Kafka currently runs as a single node that acts as both controller and broker. If that instance goes down, the event pipeline stops — separate controller and broker roles (with replication) would be needed for proper high availability.
