@@ -98,13 +98,27 @@ Grafana is exposed via ingress:
 
 ## Getting started
 
-No Rust toolchain is required on the host — everything runs in Docker.
+Local Docker Compose is a single-replica stack (no sharded MongoDB, no observability sidecars). Everything runs in Docker — no Rust toolchain on the host.
 
 ```bash
 docker compose up
 ```
 
-Infrastructure services (Kafka, MongoDB) start first, then the application services.
+Infrastructure (Kafka, MongoDB) starts first, then the application services. The first Rust compile per service can take several minutes; later starts reuse cached `target/` volumes. If several services compile at once and share the Cargo registry volume, a rare unpack race can fail the first build — `cargo watch` usually retries, or run `docker compose restart <service>`.
+
+Once up:
+
+| What | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| Public API | http://localhost:8080 |
+| WebSocket (delivery) | ws://localhost:8081/ws |
+| Kafka UI | http://localhost:8082 |
+| Storage Mongo Express | http://localhost:8083 |
+| Chat Mongo Express | http://localhost:8086 |
+| Users Mongo Express | http://localhost:8089 |
+
+Frontend env for Compose lives in `frontend/.env` (`NEXT_PUBLIC_API_URL=http://localhost:8080`, `NEXT_PUBLIC_WS_URL=ws://localhost:8081/ws`). See `.env.example` for other documented overrides (most values are already set in `docker-compose.yml`).
 
 ### Development workflow
 
@@ -123,7 +137,7 @@ docker compose run --rm frontend npm install
 docker compose up frontend
 ```
 
-See `.env.example` for configurable environment variables.
+Observability (Grafana, Tempo, Mimir, OTel Collector) is set up for Kubernetes, not this Compose stack.
 
 ### Local Kubernetes
 
@@ -379,3 +393,5 @@ To evaluate the results of the load test:
 - **Kafka controller / broker** — Kafka currently runs as a single node that acts as both controller and broker. If that instance goes down, the event pipeline stops — separate controller and broker roles (with replication) would be needed for proper high availability.
 
 - **Logging** — Traces go to Tempo and metrics to Mimir, but there is no log aggregation yet. Adding something like Loki (or similar) would complete the observability stack so logs can be queried alongside traces and metrics.
+
+- **Optional OTel for local Compose** — Rust services always initialize an OTLP exporter. Without a collector (Compose has none today), export attempts fail quietly against the default endpoint. Making telemetry opt-in when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset would keep local logs cleaner.
